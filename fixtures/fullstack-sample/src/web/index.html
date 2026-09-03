@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Fixture App</title>
+</head>
+<body>
+  <h1>Fixture Fullstack Sample</h1>
+  <p id="users">Loading users...</p>
+  <script>
+    fetch('/api/users').then(r => r.json()).then(u => {
+      document.getElementById('users').textContent = 'User: ' + u.name;
+    });
+  </script>
+</body>
+</html>

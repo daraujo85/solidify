@@ -1,0 +1,4 @@
+erro [config_invalid]: campo obrigatório ausente
+  campo: ai.provider.base_url
+  causa: chave "ai.provider" não encontrada
+  ação: rode `solidify init` para gerar um solidify.json válido

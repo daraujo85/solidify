@@ -1,0 +1,10 @@
+{
+  "error": {
+    "code": "config_invalid",
+    "message": "campo obrigatório ausente",
+    "field": "ai.provider.base_url",
+    "cause": "chave \"ai.provider\" não encontrada",
+    "hint": "rode `solidify init` para gerar um solidify.json válido",
+    "exit_code": 3
+  }
+}

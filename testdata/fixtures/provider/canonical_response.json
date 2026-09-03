@@ -1,0 +1,40 @@
+{
+  "solid": {
+    "S": {
+      "applicable": true,
+      "confidence": 0.9,
+      "summary": "Mock summary S",
+      "findings": [],
+      "after_score": 0.8
+    },
+    "O": {
+      "applicable": true,
+      "confidence": 0.9,
+      "summary": "Mock summary O",
+      "findings": [],
+      "after_score": 0.8
+    },
+    "L": {
+      "applicable": true,
+      "confidence": 0.9,
+      "summary": "Mock summary L",
+      "findings": [],
+      "after_score": 0.8
+    },
+    "I": {
+      "applicable": true,
+      "confidence": 0.9,
+      "summary": "Mock summary I",
+      "findings": [],
+      "after_score": 0.8
+    },
+    "D": {
+      "applicable": true,
+      "confidence": 0.9,
+      "summary": "Mock summary D",
+      "findings": [],
+      "after_score": 0.8
+    }
+  },
+  "quality_score": 0.8
+}

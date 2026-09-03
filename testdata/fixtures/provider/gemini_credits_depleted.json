@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": 429,
+    "message": "Your prepayment credits are depleted."
+  }
+}

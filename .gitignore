@@ -1,0 +1,8 @@
+/bin/
+/build/
+.solidify/out/
+.solidify/release-report.json
+.claude/scheduled_tasks.lock
+*.log
+.sessionflow/
+/solidify

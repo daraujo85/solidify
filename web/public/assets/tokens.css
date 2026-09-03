@@ -1,0 +1,95 @@
+/* Design tokens (SAI-081) — print-friendly, no Tailwind. */
+:root {
+  --bg: #fafbfc;
+  --fg: #1f2933;
+  --muted: #5b6b7c;
+  --accent: #2c5282;
+  --pass: #2f855a;
+  --warn: #c05621;
+  --fail: #c53030;
+  --blocked: #6b46c1;
+  --incomplete: #718096;
+  --card: #ffffff;
+  --border: #e2e8f0;
+  --gap: 16px;
+  --radius: 6px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1a202c;
+    --fg: #f7fafc;
+    --muted: #a0aec0;
+    --card: #2d3748;
+    --border: #4a5568;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--fg);
+}
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+.bar h1 { font-size: 18px; margin: 0; }
+.bar nav a {
+  margin-left: 12px;
+  color: var(--accent);
+  text-decoration: none;
+}
+main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 20px;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: var(--gap);
+}
+.row { display: flex; gap: var(--gap); flex-wrap: wrap; }
+.col { flex: 1; min-width: 240px; }
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.badge.PASS       { background: var(--pass); color: white; }
+.badge.WARN       { background: var(--warn); color: white; }
+.badge.FAIL       { background: var(--fail); color: white; }
+.badge.BLOCKED    { background: var(--blocked); color: white; }
+.badge.INCOMPLETE { background: var(--incomplete); color: white; }
+.score { font-size: 32px; font-weight: 700; font-family: var(--mono); }
+.muted { color: var(--muted); font-size: 13px; }
+ul.bullets { margin: 0; padding-left: 20px; }
+ul.bullets li { margin: 4px 0; }
+pre.code {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 12px;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+@media print {
+  .bar { display: none; }
+  main { max-width: 100%; }
+  .card { break-inside: avoid; border: 1px solid #999; }
+}

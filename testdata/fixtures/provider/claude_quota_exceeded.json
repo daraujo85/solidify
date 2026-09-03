@@ -1,0 +1,6 @@
+{
+  "error": {
+    "type": "error",
+    "message": "quota exceeded; reset in 1 hour"
+  }
+}

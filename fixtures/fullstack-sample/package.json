@@ -1,0 +1,9 @@
+{
+  "name": "fixture-fullstack-sample",
+  "version": "1.0.0",
+  "description": "E2E fullstack sample",
+  "scripts": {
+    "test": "echo 'no test'"
+  },
+  "dependencies": {}
+}

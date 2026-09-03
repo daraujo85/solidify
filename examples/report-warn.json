@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0.0",
+  "run": {
+    "id": "example-2026-08-20-warn",
+    "profile": "release",
+    "solidify_version": "1.0.0",
+    "started_at": "2026-08-20T12:00:00Z",
+    "finished_at": "2026-08-20T12:04:00Z",
+    "config_hash": "warn12345",
+    "evidence_hash": "warn67890"
+  },
+  "scores": {
+    "global": 78.0,
+    "grade": "C"
+  },
+  "solid": {
+    "principles": {
+      "S": {"letter": "B", "score": 80.0},
+      "O": {"letter": "C", "score": 72.0},
+      "L": {"letter": "B", "score": 82.0},
+      "I": {"letter": "B", "score": 78.0},
+      "D": {"letter": "C", "score": 76.0}
+    }
+  },
+  "risk": {
+    "score": 22,
+    "level": "medium",
+    "factors": [
+      {"kind": "env", "level": "medium", "path": ".env.example"}
+    ]
+  },
+  "quality_gate": {
+    "status": "WARN",
+    "threshold": 75,
+    "reasons": [
+      "score 78.0 within tolerance band"
+    ]
+  },
+  "ai_review": {
+    "peers": [
+      {"role": "peer_a", "model": "gc/gemini-3.1-pro-preview", "verdict": "approve_with_changes"},
+      {"role": "peer_b", "model": "kr/claude-sonnet-5", "verdict": "approve_with_changes"},
+      {"role": "arbiter_c", "model": "cc/claude-opus-5", "verdict": "approve_with_changes"}
+    ],
+    "robustness": {
+      "status": "mostly-stable",
+      "quality_delta": 3.5,
+      "overlap": 0.85,
+      "gate_stable": true
+    }
+  },
+  "recommendations": [
+    "Consider improving O and D principles.",
+    "Document env var additions."
+  ]
+}

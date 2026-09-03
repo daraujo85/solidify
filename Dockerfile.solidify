@@ -1,0 +1,33 @@
+# syntax=docker/dockerfile:1
+#
+# Dockerfile canônico do Solidify (ADR 0081).
+#
+# Build:
+#   docker build -f Dockerfile.solidify -t solidify:local .
+#
+# Run (host macOS com Docker Desktop):
+#   docker run --rm -v "$PWD":/work solidify:local version
+#   docker run --rm -v "$PWD":/work solidify:local doctor
+#   docker run --rm -v "$PWD":/work solidify:local dashboard --port 8765
+#
+# Use o wrapper bin/solidify para forward de env (9Router token).
+
+# Stage 1: build.
+FROM golang:1.26-alpine AS build
+RUN apk add --no-cache git ca-certificates
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+# Build estático (CGO=0) pro binário rodar em alpine minimal.
+# ldflags dinâmico: versão injetada em runtime.
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/solidify ./cmd/solidify
+
+# Stage 2: runtime non-root.
+FROM alpine:3.20
+RUN apk add --no-cache git ca-certificates tzdata && \
+    addgroup -S solidify && adduser -S solidify -G solidify
+COPY --from=build --chown=solidify:solidify /out/solidify /usr/local/bin/solidify
+USER solidify
+WORKDIR /work
+ENTRYPOINT ["/usr/local/bin/solidify"]

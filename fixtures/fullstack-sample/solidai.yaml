@@ -1,0 +1,10 @@
+profile: release
+analyzers:
+  - name: go-test
+    enabled: true
+  - name: lighthouse
+    enabled: false  # não roda em CI backend-only
+migrations:
+  detect: true
+env_changes:
+  detect: true

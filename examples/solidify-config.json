@@ -1,0 +1,73 @@
+{
+  "$schema": "../schemas/solidify-config.schema.json",
+  "schema_version": "1.0.0",
+  "project": {
+    "name": "my-project",
+    "default_base": "origin/main",
+    "artifact_dir": ".solidify",
+    "issue_key_patterns": ["[A-Z][A-Z0-9]+-[0-9]+"]
+  },
+  "analysis": {
+    "default_profile": "quick",
+    "use_merge_base": true
+  },
+  "profiles": {
+    "quick": {
+      "require_peer_a": true,
+      "require_peer_b": false,
+      "require_arbiter": false,
+      "generate_pdf": false,
+      "active_security": false
+    },
+    "release": {
+      "require_peer_a": true,
+      "require_peer_b": true,
+      "require_arbiter": true,
+      "generate_pdf": true,
+      "active_security": false
+    }
+  },
+  "ai": {
+    "peer_a": {
+      "source": "terminal-mcp"
+    },
+    "external_provider": {
+      "type": "openai-compatible",
+      "preset": "9router",
+      "base_url_host": "http://127.0.0.1:20128/v1",
+      "base_url_docker": "http://host.docker.internal:20128/v1",
+      "api_key_env": "ANTHROPIC_AUTH_TOKEN",
+      "model_discovery": true,
+      "request_timeout_seconds": 180
+    },
+    "selection": {
+      "mode": "pinned",
+      "peer_b": {
+        "preferred": ["solidai-peer-b"],
+        "exclude": []
+      },
+      "arbiter": {
+        "preferred": ["solidai-arbiter"],
+        "exclude": [],
+        "must_differ_from_peer_b": true
+      },
+      "probe": {
+        "enabled": true,
+        "cache_hours": 168,
+        "require_json_compliance": true
+      }
+    },
+    "review": {
+      "peer_prompt_version": "peer-review-v1",
+      "arbiter_prompt_version": "arbiter-v1",
+      "temperature": 0,
+      "max_repair_attempts": 1
+    }
+  },
+  "privacy": {
+    "persist_full_diff": true,
+    "persist_model_requests": false,
+    "persist_model_responses": true,
+    "redact_secrets": true
+  }
+}

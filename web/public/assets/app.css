@@ -1,0 +1,43 @@
+/* App layout (SAI-081). */
+.grid { display: grid; gap: 16px; }
+.grid-2 { grid-template-columns: repeat(2, 1fr); }
+.grid-3 { grid-template-columns: repeat(3, 1fr); }
+.grid-4 { grid-template-columns: repeat(4, 1fr); }
+
+@media (max-width: 720px) {
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+}
+
+table { border-collapse: collapse; width: 100%; }
+th, td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; font-size: 14px; }
+th { font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; }
+
+.principle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  margin-bottom: 6px;
+  background: var(--bg);
+}
+.principle .delta { font-family: var(--mono); font-size: 14px; }
+.principle .delta.pos { color: var(--pass); }
+.principle .delta.neg { color: var(--fail); }
+
+.kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+/* SAI-125: trend sparkline */
+.spark { width: 100%; height: auto; display: block; }
+.spark .threshold { stroke: var(--border); stroke-dasharray: 4 4; stroke-width: 1; }
+table td.pos { color: var(--pass); font-family: var(--mono); }
+table td.neg { color: var(--fail); font-family: var(--mono); }

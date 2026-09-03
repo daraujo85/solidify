@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0.0",
+  "run": {
+    "id": "example-2026-08-20-fail",
+    "profile": "release",
+    "solidify_version": "1.0.0",
+    "started_at": "2026-08-20T11:00:00Z",
+    "finished_at": "2026-08-20T11:08:00Z",
+    "config_hash": "xyz98765",
+    "evidence_hash": "uvw43210"
+  },
+  "scores": {
+    "global": 62.0,
+    "grade": "D"
+  },
+  "solid": {
+    "principles": {
+      "S": {"letter": "C", "score": 70.0},
+      "O": {"letter": "D", "score": 58.0},
+      "L": {"letter": "C", "score": 65.0},
+      "I": {"letter": "D", "score": 55.0},
+      "D": {"letter": "C", "score": 62.0}
+    }
+  },
+  "risk": {
+    "score": 55,
+    "level": "high",
+    "factors": [
+      {"kind": "migration", "level": "high", "path": "db/005_add_users.sql"},
+      {"kind": "env", "level": "high", "path": ".env.example"}
+    ]
+  },
+  "quality_gate": {
+    "status": "FAIL",
+    "threshold": 75,
+    "reasons": [
+      "score 62.0 < threshold 75",
+      "high-risk migration detected"
+    ]
+  },
+  "ai_review": {
+    "peers": [
+      {"role": "peer_a", "model": "gc/gemini-3.1-pro-preview", "verdict": "reject"},
+      {"role": "peer_b", "model": "kr/claude-sonnet-5", "verdict": "approve_with_changes"},
+      {"role": "arbiter_c", "model": "cc/claude-opus-5", "verdict": "reject"}
+    ],
+    "robustness": {
+      "status": "unstable",
+      "quality_delta": 8.5,
+      "overlap": 0.65,
+      "gate_stable": false
+    }
+  },
+  "critical_findings": [
+    {"id": "F-001", "severity": "critical", "title": "Auth bypass in /api/admin"}
+  ],
+  "recommendations": [
+    "Block release: critical auth finding.",
+    "Fix SOLID D-principle violations before retry."
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://solidify.local/schemas/solidify-config.schema.json",
+  "title": "Solidify Configuration",
+  "type": "object",
+  "required": ["schema_version", "project", "analysis", "profiles", "scoring", "analyzers", "ai", "report", "privacy"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "schema_version": {"type": "string", "const": "1.0.0"},
+    "project": {"type": "object"},
+    "analysis": {"type": "object"},
+    "profiles": {"type": "object"},
+    "scoring": {"type": "object"},
+    "git": {"type": "object"},
+    "detectors": {"type": "object"},
+    "runtime": {"type": "object"},
+    "targets": {"type": "object"},
+    "analyzers": {"type": "object"},
+    "ai": {"type": "object"},
+    "report": {"type": "object"},
+    "privacy": {"type": "object"}
+  },
+  "additionalProperties": false
+}

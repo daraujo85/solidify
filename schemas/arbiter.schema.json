@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://solidify.local/schemas/arbiter.schema.json",
+  "title": "Solidify Arbiter Verdict",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "evidence_hash", "peer_a_hash", "peer_b_hash", "principles", "overall_confidence", "material_divergences", "limitations"],
+  "properties": {
+    "schema_version": {"type": "string", "const": "1.0.0"},
+    "evidence_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "peer_a_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "peer_b_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "principles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["S", "O", "L", "I", "D"],
+      "properties": {
+        "S": {"$ref": "#/$defs/verdict"},
+        "O": {"$ref": "#/$defs/verdict"},
+        "L": {"$ref": "#/$defs/verdict"},
+        "I": {"$ref": "#/$defs/verdict"},
+        "D": {"$ref": "#/$defs/verdict"}
+      }
+    },
+    "overall_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "material_divergences": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["principle", "description", "resolution"],
+        "properties": {
+          "principle": {"type": "string", "enum": ["S", "O", "L", "I", "D"]},
+          "description": {"type": "string"},
+          "resolution": {"type": "string"}
+        }
+      }
+    },
+    "limitations": {"type": "array", "items": {"type": "string"}}
+  },
+  "$defs": {
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["applicable", "before_score", "after_score", "confidence", "decision", "accepted_findings", "rejected_findings", "merged_findings", "reason"],
+      "properties": {
+        "applicable": {"type": "boolean"},
+        "before_score": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+        "after_score": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "decision": {"type": "string", "enum": ["peer_a_preferred", "peer_b_preferred", "merged", "both_rejected", "insufficient_evidence"]},
+        "accepted_findings": {"type": "array", "items": {"type": "string"}},
+        "rejected_findings": {"type": "array", "items": {"type": "string"}},
+        "merged_findings": {"type": "array", "items": {"type": "object"}},
+        "reason": {"type": "string"}
+      }
+    }
+  }
+}

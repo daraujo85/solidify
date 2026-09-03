@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.0.0",
+  "run": {
+    "id": "example-2026-08-20-pass",
+    "profile": "release",
+    "solidify_version": "1.0.0",
+    "started_at": "2026-08-20T10:00:00Z",
+    "finished_at": "2026-08-20T10:05:00Z",
+    "config_hash": "abc12345",
+    "evidence_hash": "def67890"
+  },
+  "scores": {
+    "global": 87.5,
+    "grade": "B"
+  },
+  "solid": {
+    "principles": {
+      "S": {"letter": "A", "score": 92.0},
+      "O": {"letter": "B", "score": 85.0},
+      "L": {"letter": "A", "score": 90.0},
+      "I": {"letter": "B", "score": 84.0},
+      "D": {"letter": "A", "score": 88.0}
+    }
+  },
+  "risk": {
+    "score": 15,
+    "level": "low",
+    "factors": []
+  },
+  "quality_gate": {
+    "status": "PASS",
+    "threshold": 75,
+    "reasons": []
+  },
+  "ai_review": {
+    "peers": [
+      {"role": "peer_a", "model": "gc/gemini-3.1-pro-preview", "verdict": "approve"},
+      {"role": "peer_b", "model": "kr/claude-sonnet-5", "verdict": "approve"},
+      {"role": "arbiter_c", "model": "cc/claude-opus-5", "verdict": "approve"}
+    ],
+    "robustness": {
+      "status": "stable",
+      "quality_delta": 1.2,
+      "overlap": 0.92,
+      "gate_stable": true
+    }
+  },
+  "recommendations": [
+    "Add CHANGELOG entry for new feature.",
+    "Update docs for the new endpoint."
+  ],
+  "limitations": [
+    "Lighthouse not run in this profile."
+  ]
+}
