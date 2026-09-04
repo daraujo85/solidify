@@ -33,6 +33,32 @@ func TestNewExecutorOK(t *testing.T) {
 	}
 }
 
+// TestExecute_ResolvedModelFromProviderResponse (mesmo achado do peer,
+// 2026-09-04): o arbiter também descartava ai.CompleteResult.Model,
+// guardando só o requested (opts.Model) em todo lugar. ResolvedModel
+// precisa refletir o que o provider de fato executou.
+func TestExecute_ResolvedModelFromProviderResponse(t *testing.T) {
+	p := newArbiterMock("mock", "gpt-5.4-real", goodVerdictJSON, 0)
+	exec, err := NewExecutor(ExecutorOptions{
+		RunID:    "r1",
+		Evidence: "ev", PeerAOutput: "pa", PeerBOutput: "pb", DivMap: "dm",
+		Provider: p, Model: "claude-premium-arbiter",
+	})
+	if err != nil {
+		t.Fatalf("NewExecutor err: %v", err)
+	}
+	res, err := exec.Execute(context.Background())
+	if err != nil {
+		t.Fatalf("Execute err: %v", err)
+	}
+	if res.RequestedModel != "claude-premium-arbiter" {
+		t.Fatalf("RequestedModel = %q, esperava claude-premium-arbiter", res.RequestedModel)
+	}
+	if res.ResolvedModel != "gpt-5.4-real" {
+		t.Fatalf("ResolvedModel = %q, esperava gpt-5.4-real", res.ResolvedModel)
+	}
+}
+
 // Aceitação: NewExecutor sem provider.
 func TestNewExecutorNoProvider(t *testing.T) {
 	if _, err := NewExecutor(ExecutorOptions{RunID: "r1"}); err == nil {
@@ -319,8 +345,10 @@ func (m *schemaCapturingMock) CompleteJSON(ctx context.Context, opts ai.Complete
 	m.lastSchema = opts.JSONSchema
 	return &ai.CompleteResult{Content: m.goodJSON}, nil
 }
-func (m *schemaCapturingMock) ListModels(ctx context.Context) ([]ai.ModelInfo, error) { return nil, nil }
-func (m *schemaCapturingMock) Metadata() ai.ProviderMetadata                          { return ai.ProviderMetadata{} }
+func (m *schemaCapturingMock) ListModels(ctx context.Context) ([]ai.ModelInfo, error) {
+	return nil, nil
+}
+func (m *schemaCapturingMock) Metadata() ai.ProviderMetadata { return ai.ProviderMetadata{} }
 
 // Aceitação: Decision consts.
 func TestDecisionConsts(t *testing.T) {
@@ -384,6 +412,7 @@ type arbiterMockProvider struct {
 	fails    int
 	calls    int
 }
+
 func newArbiterMock(name, model, goodJSON string, fails int) *arbiterMockProvider {
 	return &arbiterMockProvider{name: name, model: model, goodJSON: goodJSON, fails: fails}
 }
@@ -394,14 +423,16 @@ func (m *arbiterMockProvider) CompleteJSON(ctx context.Context, opts ai.Complete
 		m.fails--
 		return nil, errors.New("mock error")
 	}
-	return &ai.CompleteResult{Content: m.goodJSON}, nil
+	return &ai.CompleteResult{Content: m.goodJSON, Model: m.model}, nil
 }
+
 type garbleThenGood struct {
 	name    string
 	model   string
 	good    string
 	garbleN int
 }
+
 func (m *garbleThenGood) Name() string { return m.name }
 func (m *garbleThenGood) CompleteJSON(ctx context.Context, opts ai.CompleteOptions) (*ai.CompleteResult, error) {
 	if m.garbleN > 0 {
@@ -410,7 +441,9 @@ func (m *garbleThenGood) CompleteJSON(ctx context.Context, opts ai.CompleteOptio
 	}
 	return &ai.CompleteResult{Content: m.good}, nil
 }
-func (m *arbiterMockProvider) ListModels(ctx context.Context) ([]ai.ModelInfo, error) { return nil, nil }
+func (m *arbiterMockProvider) ListModels(ctx context.Context) ([]ai.ModelInfo, error) {
+	return nil, nil
+}
 func (m *garbleThenGood) ListModels(ctx context.Context) ([]ai.ModelInfo, error) { return nil, nil }
-func (m *arbiterMockProvider) Metadata() ai.ProviderMetadata { return ai.ProviderMetadata{} }
-func (m *garbleThenGood) Metadata() ai.ProviderMetadata { return ai.ProviderMetadata{} }
+func (m *arbiterMockProvider) Metadata() ai.ProviderMetadata                     { return ai.ProviderMetadata{} }
+func (m *garbleThenGood) Metadata() ai.ProviderMetadata                          { return ai.ProviderMetadata{} }

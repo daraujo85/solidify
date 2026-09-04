@@ -36,12 +36,16 @@ type ExecutorResult struct {
 	ValidationErrors []string       `json:"validation_errors,omitempty"`
 	// SAI-116: status do score. `available` = schema bateu; `unavailable` =
 	// schema falhou mesmo após repair; `error` = provider falhou.
-	ScoreStatus    string    `json:"score_status"`
-	QualityScore   float64   `json:"quality_score"`
-	RequestedModel string    `json:"requested_model,omitempty"`
-	FallbackUsed   bool      `json:"fallback_used,omitempty"`
-	FallbackCount  int       `json:"fallback_count,omitempty"`
-	Attempts       []Attempt `json:"attempts,omitempty"`
+	ScoreStatus    string  `json:"score_status"`
+	QualityScore   float64 `json:"quality_score"`
+	RequestedModel string  `json:"requested_model,omitempty"`
+	// ResolvedModel é o model que o provider de fato executou (vem do
+	// payload HTTP real, ai.CompleteResult.Model) — distinto de
+	// RequestedModel quando um combo do 9router cai pro fallback.
+	ResolvedModel string    `json:"resolved_model,omitempty"`
+	FallbackUsed  bool      `json:"fallback_used,omitempty"`
+	FallbackCount int       `json:"fallback_count,omitempty"`
+	Attempts      []Attempt `json:"attempts,omitempty"`
 }
 
 // Attempt registra uma tentativa de modelo sem payload.
@@ -146,6 +150,7 @@ func (e *Executor) Execute(ctx context.Context, opts ExecutorOptions) (*Executor
 		}
 		att.Result = "success"
 		result.Attempts = append(result.Attempts, att)
+		result.ResolvedModel = res.Model
 
 		parsed, ok := parseJSONContent(res.Content)
 		if !ok {
@@ -155,6 +160,7 @@ func (e *Executor) Execute(ctx context.Context, opts ExecutorOptions) (*Executor
 				repaired, rerr := e.repairOutput(ctx, opts, res.Content, nil)
 				if rerr == nil {
 					res = repaired
+					result.ResolvedModel = res.Model
 					parsed, ok = parseJSONContent(res.Content)
 					result.RepairCount++
 				}
@@ -179,6 +185,7 @@ func (e *Executor) Execute(ctx context.Context, opts ExecutorOptions) (*Executor
 						if verrs2 := validateCanonical(reparsed); len(verrs2) == 0 {
 							parsed = reparsed
 							res = repaired
+							result.ResolvedModel = res.Model
 							result.RepairCount++
 							result.ValidationErrors = verrs // guarda original
 							goto ok

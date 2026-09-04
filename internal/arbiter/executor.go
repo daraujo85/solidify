@@ -53,13 +53,13 @@ type ScoreVerdict struct {
 
 // Verdict é a decisão final do árbitro.
 type Verdict struct {
-	RunID                 string                  `json:"run_id"`
-	Actor                 string                  `json:"actor"`
-	Verdict               string                  `json:"verdict"` // "resolved", etc.
-	Resolutions           []Resolution            `json:"resolutions"`
-	Reasoning             string                  `json:"reasoning"`
-	ApplicabilityVerdicts []ApplicabilityVerdict  `json:"applicability_verdicts,omitempty"`
-	ScoreVerdicts         []ScoreVerdict          `json:"score_verdicts,omitempty"`
+	RunID                 string                 `json:"run_id"`
+	Actor                 string                 `json:"actor"`
+	Verdict               string                 `json:"verdict"` // "resolved", etc.
+	Resolutions           []Resolution           `json:"resolutions"`
+	Reasoning             string                 `json:"reasoning"`
+	ApplicabilityVerdicts []ApplicabilityVerdict `json:"applicability_verdicts,omitempty"`
+	ScoreVerdicts         []ScoreVerdict         `json:"score_verdicts,omitempty"`
 }
 
 // ExecutorOptions opções de execução do Arbiter.
@@ -83,10 +83,14 @@ type ExecutorOptions struct {
 
 // ExecutorResult contém o resultado do Arbiter.
 type ExecutorResult struct {
-	Verdict          *Verdict
-	Content          string
-	Model            string
-	RequestedModel   string
+	Verdict        *Verdict
+	Content        string
+	Model          string
+	RequestedModel string
+	// ResolvedModel é o model que o provider de fato executou
+	// (ai.CompleteResult.Model) — distinto de RequestedModel quando um
+	// combo do 9router cai pro fallback.
+	ResolvedModel    string
 	Provider         string
 	RetryCount       int
 	RepairCount      int
@@ -270,11 +274,11 @@ func (e *Executor) Execute(ctx context.Context) (*ExecutorResult, error) {
 			Messages:   msgs,
 			JSONSchema: schemaFor(opts.RequirePrincipleVerdicts),
 		})
-		
+
 		cancel()
 		latency := time.Since(start)
 		result.LatencyMS += latency.Milliseconds()
-		
+
 		att := peer.Attempt{
 			Attempt:   attempt + 1,
 			Provider:  opts.Provider.Name(),
@@ -290,16 +294,18 @@ func (e *Executor) Execute(ctx context.Context) (*ExecutorResult, error) {
 			result.Attempts = append(result.Attempts, att)
 			continue
 		}
-		
+
 		att.Result = "success"
 		result.Attempts = append(result.Attempts, att)
-		
+		result.ResolvedModel = res.Model
+
 		parsed, err := parseVerdictContent(res.Content)
 		if err != nil {
 			if result.RepairCount == 0 {
 				repaired, rerr := e.repairOutput(ctx, res.Content)
 				if rerr == nil {
 					res = repaired
+					result.ResolvedModel = res.Model
 					parsed, err = parseVerdictContent(res.Content)
 					result.RepairCount++
 				}
@@ -322,14 +328,14 @@ func (e *Executor) Execute(ctx context.Context) (*ExecutorResult, error) {
 			result.Content = res.Content
 			return result, nil
 		}
-		
+
 		result.Content = res.Content
 		result.Verdict = v
 		result.CompletedAt = time.Now()
 		result.ScoreStatus = peer.ScoreStatusAvailable
 		return result, nil
 	}
-	
+
 	result.CompletedAt = time.Now()
 	result.ScoreStatus = peer.ScoreStatusError
 	return result, fmt.Errorf("arbiter: %d tentativas falharam: %w", opts.MaxRetries+1, lastErr)

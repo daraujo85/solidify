@@ -457,6 +457,46 @@ func TestSpecExampleLoads(t *testing.T) {
 	}
 }
 
+// SAI-135: profile ativo exige peer_b/arbiter mas preferred[] vazio deve
+// falhar cedo (antes de gastar diff/tokens), não só em modo pinned.
+func TestValidateActiveProfileRequiresPreferredModel(t *testing.T) {
+	cfg := Default()
+	cfg.Project.Name = "x"
+	// release exige peer_b e arbiter; defaults deixam ambos preferred vazio.
+
+	err := cfg.ValidateActiveProfile("release")
+	var typed *errs.Error
+	if !asError(err, &typed) {
+		t.Fatalf("esperava *errs.Error, veio %v", err)
+	}
+	if typed.Code != errs.CodeConfig {
+		t.Fatalf("código = %q", typed.Code)
+	}
+	if typed.Field != "ai.selection.peer_b.preferred" {
+		t.Fatalf("field = %q", typed.Field)
+	}
+}
+
+func TestValidateActiveProfileOKWhenPreferredSet(t *testing.T) {
+	cfg := Default()
+	cfg.Project.Name = "x"
+	cfg.AI.Selection.PeerB.Preferred = []string{"some-model"}
+	cfg.AI.Selection.Arbiter.Preferred = []string{"other-model"}
+
+	if err := cfg.ValidateActiveProfile("release"); err != nil {
+		t.Fatalf("não esperava erro: %v", err)
+	}
+}
+
+func TestValidateActiveProfileSkipsUnrequiredActors(t *testing.T) {
+	cfg := Default()
+	cfg.Project.Name = "x"
+	// quick só exige peer_a, que já tem preferred default.
+	if err := cfg.ValidateActiveProfile("quick"); err != nil {
+		t.Fatalf("não esperava erro: %v", err)
+	}
+}
+
 // asError é errors.As sem importar errors no corpo dos testes.
 func asError(err error, target **errs.Error) bool {
 	for err != nil {

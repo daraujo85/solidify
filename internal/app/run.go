@@ -177,6 +177,12 @@ func runRun(args []string, env Env, logger *slog.Logger) (retErr error) {
 	requireArbiter := boolOr(prof.RequireArbiter, false)
 	requireDistinct := boolOr(prof.RequireDistinctExternalModels, false)
 
+	// SAI-135: falha cedo se o profile exige ator sem model preferido —
+	// antes de gastar diff/tokens (firstPreferred() só detectava isso depois).
+	if verr := cfg.ValidateActiveProfile(*profileName); verr != nil {
+		return verr
+	}
+
 	// Evidência: diff real entre --base e --head (internal/gitx).
 	diffFiles, err := gitx.Diff(*dir, *base+".."+*head, gitx.DiffOpts{})
 	if err != nil {
@@ -320,6 +326,11 @@ func runRun(args []string, env Env, logger *slog.Logger) (retErr error) {
 			logger.Warn("arbiter falhou", "err", aerr)
 		}
 		arbiterRes, arbiterCalled = res, res != nil && res.Verdict != nil
+		if !arbiterCalled && res != nil {
+			logger.Warn("arbiter não produziu verdict",
+				"errors", res.Errors, "validation_errors", res.ValidationErrors,
+				"score_status", res.ScoreStatus, "content", res.Content)
+		}
 	}
 
 	// --- score global: peer_b tem precedência (2ª opinião real); senão peer_a ---
@@ -814,13 +825,22 @@ func divergenceStrings(d *peer.DivergenceMap) []string {
 func buildActors(peerA, peerB *peer.ExecutorResult, arb *arbiter.ExecutorResult) []report.Actor {
 	var actors []report.Actor
 	if peerA != nil {
-		actors = append(actors, report.Actor{Role: "peer_a", Provider: peerA.Provider, ModelID: peerA.Model, Status: peerA.ScoreStatus})
+		actors = append(actors, report.Actor{
+			Role: "peer_a", Provider: peerA.Provider, ModelID: peerA.Model, Status: peerA.ScoreStatus,
+			RequestedModel: peerA.RequestedModel, ExecutedModel: peerA.ResolvedModel,
+		})
 	}
 	if peerB != nil {
-		actors = append(actors, report.Actor{Role: "peer_b", Provider: peerB.Provider, ModelID: peerB.Model, Status: peerB.ScoreStatus})
+		actors = append(actors, report.Actor{
+			Role: "peer_b", Provider: peerB.Provider, ModelID: peerB.Model, Status: peerB.ScoreStatus,
+			RequestedModel: peerB.RequestedModel, ExecutedModel: peerB.ResolvedModel,
+		})
 	}
 	if arb != nil {
-		actors = append(actors, report.Actor{Role: "arbiter", Provider: arb.Provider, ModelID: arb.Model, Status: arb.ScoreStatus})
+		actors = append(actors, report.Actor{
+			Role: "arbiter", Provider: arb.Provider, ModelID: arb.Model, Status: arb.ScoreStatus,
+			RequestedModel: arb.RequestedModel, ExecutedModel: arb.ResolvedModel,
+		})
 	}
 	return actors
 }

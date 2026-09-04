@@ -121,6 +121,36 @@ func (c Config) validateAnalysis() error {
 	return nil
 }
 
+// ValidateActiveProfile verifica, cedo (antes de gastar diff/tokens), se o
+// profile efetivamente escolhido para rodar tem model preferido configurado
+// para cada ator que ele exige. `validateAI` só cobre isso em modo "pinned";
+// em "hybrid"/"discover" (o default) um profile release/contractual com
+// selection.peer_b/arbiter.preferred vazio só falhava depois do diff já ter
+// sido gerado (SAI-135).
+func (c Config) ValidateActiveProfile(name string) error {
+	resolved, err := c.ResolveProfile(name)
+	if err != nil {
+		return err
+	}
+	checks := []struct {
+		required  bool
+		preferred []string
+		field     string
+	}{
+		{resolved.RequirePeerA, c.AI.Selection.PeerA.Preferred, "ai.selection.peer_a.preferred"},
+		{resolved.RequirePeerB, c.AI.Selection.PeerB.Preferred, "ai.selection.peer_b.preferred"},
+		{resolved.RequireArbiter, c.AI.Selection.Arbiter.Preferred, "ai.selection.arbiter.preferred"},
+	}
+	for _, chk := range checks {
+		if chk.required && len(chk.preferred) == 0 {
+			return invalid(chk.field,
+				"profile "+quote(name)+" exige este ator mas nenhum model preferido está configurado").
+				WithHint("preencha " + chk.field + " no solidify.json antes de rodar este profile")
+		}
+	}
+	return nil
+}
+
 func (c Config) validateProfiles() error {
 	if len(c.Profiles) == 0 {
 		return invalid("profiles", "ao menos um perfil é obrigatório")

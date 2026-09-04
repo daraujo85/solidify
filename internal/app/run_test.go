@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/diegoaraujo/solidify/internal/arbiter"
 	"github.com/diegoaraujo/solidify/internal/peer"
 )
 
@@ -299,4 +300,52 @@ func TestRunRun_GlobalScoreSourceOfTruth(t *testing.T) {
 			t.Fatalf("quality_gate.status = %q; esperava PASS/non-blocking para 5/5 NOT_APPLICABLE", gateStatus)
 		}
 	})
+}
+
+// TestBuildActors_PopulatesRequestedAndResolvedModel (SAI-129, 2026-09-04):
+// buildActors() só copiava peer.ExecutorResult.Model/arbiter.ExecutorResult.Model
+// (o combo PEDIDO) pro report.Actor.ModelID — RequestedModel/ExecutedModel do
+// report ficavam sempre vazios, mesmo com peer/arbiter já guardando o model
+// REAL resolvido pelo 9router em ResolvedModel. buildActors precisa propagar
+// os dois.
+func TestBuildActors_PopulatesRequestedAndResolvedModel(t *testing.T) {
+	peerA := &peer.ExecutorResult{
+		Provider: "mock", Model: "claude-premium-a",
+		RequestedModel: "claude-premium-a", ResolvedModel: "gpt-5.4-real-a",
+		ScoreStatus: "available",
+	}
+	peerB := &peer.ExecutorResult{
+		Provider: "mock", Model: "claude-premium-b",
+		RequestedModel: "claude-premium-b", ResolvedModel: "gpt-5.4-real-b",
+		ScoreStatus: "available",
+	}
+	arb := &arbiter.ExecutorResult{
+		Provider: "mock", Model: "claude-premium-arbiter",
+		RequestedModel: "claude-premium-arbiter", ResolvedModel: "gpt-5.4-real-arb",
+		ScoreStatus: "available",
+	}
+
+	actors := buildActors(peerA, peerB, arb)
+	if len(actors) != 3 {
+		t.Fatalf("actors: %d, esperava 3", len(actors))
+	}
+	for _, a := range actors {
+		var wantReq, wantResolved string
+		switch a.Role {
+		case "peer_a":
+			wantReq, wantResolved = "claude-premium-a", "gpt-5.4-real-a"
+		case "peer_b":
+			wantReq, wantResolved = "claude-premium-b", "gpt-5.4-real-b"
+		case "arbiter":
+			wantReq, wantResolved = "claude-premium-arbiter", "gpt-5.4-real-arb"
+		default:
+			t.Fatalf("role inesperado: %q", a.Role)
+		}
+		if a.RequestedModel != wantReq {
+			t.Errorf("%s: RequestedModel = %q, esperava %q", a.Role, a.RequestedModel, wantReq)
+		}
+		if a.ExecutedModel != wantResolved {
+			t.Errorf("%s: ExecutedModel = %q, esperava %q", a.Role, a.ExecutedModel, wantResolved)
+		}
+	}
 }

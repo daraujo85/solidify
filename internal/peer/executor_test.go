@@ -12,6 +12,36 @@ func TestExecutor_AttemptsLogged(t *testing.T) {
 	// mock placeholder para compilar
 }
 
+// TestExecute_ResolvedModelFromProviderResponse (achado do usuário,
+// 2026-09-04): combos do 9router resolvem pro 1º modelo saudável — o
+// nome pedido (opts.Model, ex. "claude-premium-a") quase nunca é o
+// modelo real que respondeu. Antes deste fix, ExecutorResult só
+// guardava opts.Model (requested) em todo lugar; o valor real
+// (ai.CompleteResult.Model, vindo do payload HTTP do provider) era
+// descartado. ResolvedModel deve refletir o que o provider de fato
+// respondeu, distinto do requested quando o combo cair pro fallback.
+func TestExecute_ResolvedModelFromProviderResponse(t *testing.T) {
+	valid := `{"solid":{"S":{"applicability":"NOT_APPLICABLE"},"O":{"applicability":"NOT_APPLICABLE"},"L":{"applicability":"NOT_APPLICABLE"},"I":{"applicability":"NOT_APPLICABLE"},"D":{"applicability":"NOT_APPLICABLE"}},"quality_score":0}`
+	p := &scriptedProvider{responses: []*ai.CompleteResult{
+		{Content: valid, Model: "gpt-5.4-real"},
+	}}
+	e := NewExecutor()
+	res, err := e.Execute(context.Background(), ExecutorOptions{
+		Request:  &PeerRequest{Prompt: "review"},
+		Provider: p,
+		Model:    "claude-premium-a",
+	})
+	if err != nil {
+		t.Fatalf("Execute retornou erro: %v", err)
+	}
+	if res.RequestedModel != "claude-premium-a" {
+		t.Fatalf("RequestedModel = %q, esperava claude-premium-a", res.RequestedModel)
+	}
+	if res.ResolvedModel != "gpt-5.4-real" {
+		t.Fatalf("ResolvedModel = %q, esperava gpt-5.4-real (modelo real devolvido pelo provider)", res.ResolvedModel)
+	}
+}
+
 // scriptedProvider devolve uma resposta por chamada, na ordem — usado
 // pra testar o fluxo de repair sem bater em provider real.
 type scriptedProvider struct {
