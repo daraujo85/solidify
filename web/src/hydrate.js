@@ -169,20 +169,53 @@ export function hydrateMockup(doc, report) {
     set(slot.pct, (f.coveragePct ?? "—") + "%");
   });
 
-  // Arquivos alterados — até 6 slots reais.
+  // §9 O que foi entregue — 1:1 de git.commits[].type (Conventional
+  // Commits); mockup tem 4 slots fixos (Features/Bugfixes/Refactors/Docs).
+  // Tipos sem slot (chore/test/style/...) ficam de fora — sem inventar linha.
+  // Resumo 1-linha por commit é [novo]/LLM, indisponível hoje -> oculto.
+  const DELIV_TYPE_LABEL = { feat: "✦ Features", fix: "☂ Bugfixes", refactor: "⇄ Refactors", docs: "✎ Docs" };
+  const DELIV_TPL = [
+    { row: 523, label: 524, desc: 525, count: 526 },
+    { row: 527, label: 528, desc: 529, count: 530 },
+    { row: 531, label: 532, desc: 533, count: 534 },
+    { row: 535, label: 536, desc: 537, count: 538 },
+  ];
+  const deliveries = mapDeliveries(report);
+  const deliverGroups = deliveries.groups.filter((g) => DELIV_TYPE_LABEL[g.type]);
+  if (deliverGroups.length) {
+    set(521, `${deliveries.totalItens} iten${deliveries.totalItens === 1 ? "" : "s"}`);
+    DELIV_TPL.forEach((slot, i) => {
+      const g = deliverGroups[i];
+      if (!g) { hide(slot.row); return; }
+      set(slot.label, DELIV_TYPE_LABEL[g.type]);
+      hide(slot.desc);
+      set(slot.count, String(g.quantidade));
+    });
+  } else {
+    hide(515); // card inteiro — sem commits classificados nesta release (ex.: profile=quick)
+  }
+
+  // Arquivos alterados — até 6 slots reais; sem changed_files (ex.:
+  // profile=quick não extrai diff por arquivo) -> oculta o card inteiro,
+  // nunca mantém a contagem mockada do header sem corpo correspondente.
   const FILES_TPL = [
     { path: 552, add: 553, del: 554 }, { path: 558, add: 559, del: 560 },
     { path: 564, add: 565, del: 566 }, { path: 570, add: 571, del: 572 },
     { path: 576, add: 577, del: 578 }, { path: 582, add: 583, del: 584 },
   ];
   const changed = mapChangedFiles(report);
-  FILES_TPL.forEach((slot, i) => {
-    const f = changed.items[i];
-    if (!f) { hide(slot.path, 2); return; }
-    set(slot.path, f.path);
-    set(slot.add, "+" + (f.added_lines ?? 0));
-    set(slot.del, "-" + (f.deleted_lines ?? 0));
-  });
+  if (changed.total) {
+    set(547, `${changed.total} arquivo${changed.total === 1 ? "" : "s"}`);
+    FILES_TPL.forEach((slot, i) => {
+      const f = changed.items[i];
+      if (!f) { hide(slot.path, 2); return; }
+      set(slot.path, f.path);
+      set(slot.add, "+" + (f.added_lines ?? 0));
+      set(slot.del, "-" + (f.deleted_lines ?? 0));
+    });
+  } else {
+    hide(542);
+  }
 
   // Segurança — checklist fixo de 4 categorias (SQL Injection/Headers/
   // Redação de segredos/Dependency Scan) não tem 1:1 real (findings são
@@ -244,8 +277,10 @@ export function hydrateMockup(doc, report) {
   } else hide(911, 2);
 
   // Envs — 1:1 real; mockup só mostra 4 slots fixos.
-  const ENV_TPL = [936, 939, 942, 945];
   const envs = mapEnvs(report);
+  if (!envs.empty) set(933, envs.items.length === 1 ? "1 variável alterada" : `${envs.items.length} variáveis alteradas`);
+  else hide(932);
+  const ENV_TPL = [936, 939, 942, 945];
   ENV_TPL.forEach((tpl, i) => {
     const it = !envs.empty ? envs.items[i] : null;
     if (!it) { hide(tpl, 1); return; }
