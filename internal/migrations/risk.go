@@ -220,6 +220,58 @@ func assessMetadata(m Migration) []Finding {
 	}}
 }
 
+// Impact é a taxonomia de 3 níveis pedida pelo contrato de dados §13
+// (docs/dashboard-gap-mapping.md) — Baixo/Médio/Alto. Não é uma nova
+// análise: é uma projeção do RiskLevel que Assess já calcula por
+// finding, reaproveitando os mesmos sinais (sem reimplementar parsing).
+// Mapeamento: LOW->Baixo, MODERATE->Médio, HIGH e CRITICAL colapsam em
+// Alto (CRITICAL é um HIGH mais severo — DROP TABLE/SCHEMA — não uma 4ª
+// categoria de impacto de negócio; ex.: "add column nullable" só gera
+// finding ADD_COLUMN=LOW -> Baixo, "backfill" (NOT_NULL sem DEFAULT) gera
+// HIGH -> Alto, DROP gera HIGH/CRITICAL -> Alto).
+type Impact string
+
+const (
+	ImpactLow    Impact = "Baixo"
+	ImpactMedium Impact = "Médio"
+	ImpactHigh   Impact = "Alto"
+)
+
+var riskRank = map[RiskLevel]int{RiskLow: 0, RiskModerate: 1, RiskHigh: 2, RiskCritical: 3}
+
+// ImpactForLevel projeta um RiskLevel isolado no enum de 3 níveis.
+// RiskLevel desconhecido/vazio devolve "" — sem opinião, nunca chuta.
+func ImpactForLevel(level RiskLevel) Impact {
+	switch level {
+	case RiskLow:
+		return ImpactLow
+	case RiskModerate:
+		return ImpactMedium
+	case RiskHigh, RiskCritical:
+		return ImpactHigh
+	default:
+		return ""
+	}
+}
+
+// ImpactForFindings agrega os findings de uma migration pelo pior
+// (maior severidade) e projeta no enum de 3 níveis. Migration sem
+// finding nenhum devolve "" — não fabrica "Baixo" como default só
+// porque nada foi detectado; a ausência de sinal é ambígua, não é
+// prova de baixo risco.
+func ImpactForFindings(findings []Finding) Impact {
+	if len(findings) == 0 {
+		return ""
+	}
+	worst := RiskLow
+	for _, f := range findings {
+		if riskRank[f.Level] > riskRank[worst] {
+			worst = f.Level
+		}
+	}
+	return ImpactForLevel(worst)
+}
+
 // riskForDropTable define a severidade por tipo de objeto no DROP.
 func riskForDropObject(kind string) RiskLevel {
 	switch strings.ToUpper(kind) {

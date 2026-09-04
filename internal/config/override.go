@@ -55,6 +55,7 @@ var setters = map[string]func(*Config, string) error{
 	"analyzers.lighthouse.enabled": boolSetter(func(c *Config, v bool) { c.Analyzers.Lighthouse.Enabled = v }),
 	"analyzers.load.enabled":       boolSetter(func(c *Config, v bool) { c.Analyzers.Load.Enabled = v }),
 	"analyzers.tests.enabled":      boolSetter(func(c *Config, v bool) { c.Analyzers.Tests.Enabled = v }),
+	"analyzers.coverage.enabled":   boolSetter(func(c *Config, v bool) { c.Analyzers.Coverage.Enabled = v }),
 	"ai.external_provider.base_url_host": func(c *Config, v string) error {
 		c.AI.ExternalProvider.BaseURLHost = v
 		return nil

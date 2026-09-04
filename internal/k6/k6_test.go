@@ -3,6 +3,7 @@ package k6
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -240,33 +241,35 @@ func TestPassThresholdsThresholdFailed(t *testing.T) {
 	}
 }
 
-// Aceitação: RunK6.
+// Aceitação: RunK6 execução real — sem binário k6 no PATH, falha
+// explicitamente (nunca finge sucesso). Ambiente com k6 instalado e
+// summary-export funcionando teria RunResult != nil.
 func TestRunK6Binary(t *testing.T) {
-	cmd, err := RunK6(context.Background(), RunConfig{
+	if _, err := exec.LookPath("k6"); err == nil {
+		t.Skip("k6 disponível no PATH — este teste só cobre o caminho sem binário")
+	}
+	_, err := RunK6(context.Background(), RunConfig{
 		Mode:   ModeBinary,
 		Script: []byte("//"),
 		Target: "http://x",
 	})
-	if err != nil {
-		t.Fatalf("err: %v", err)
-	}
-	if !strings.Contains(cmd, "k6 run") {
-		t.Errorf("cmd = %q", cmd)
+	if err == nil {
+		t.Errorf("sem k6 no PATH devia falhar")
 	}
 }
 
-// Aceitação: RunK6 container.
+// Aceitação: RunK6 container — sem docker, falha explicitamente.
 func TestRunK6Container(t *testing.T) {
-	cmd, err := RunK6(context.Background(), RunConfig{
+	if _, err := exec.LookPath("docker"); err == nil {
+		t.Skip("docker disponível — este teste só cobre o caminho sem daemon acessível")
+	}
+	_, err := RunK6(context.Background(), RunConfig{
 		Mode:   ModeContainer,
 		Script: []byte("//"),
 		Target: "http://x",
 	})
-	if err != nil {
-		t.Fatalf("err: %v", err)
-	}
-	if !strings.Contains(cmd, "docker run") {
-		t.Errorf("cmd = %q", cmd)
+	if err == nil {
+		t.Errorf("sem docker devia falhar")
 	}
 }
 

@@ -183,6 +183,8 @@ func runRun(args []string, env Env, logger *slog.Logger) (retErr error) {
 		return verr
 	}
 
+	ctx := context.Background()
+
 	// Evidência: diff real entre --base e --head (internal/gitx).
 	diffFiles, err := gitx.Diff(*dir, *base+".."+*head, gitx.DiffOpts{})
 	if err != nil {
@@ -193,6 +195,29 @@ func runRun(args []string, env Env, logger *slog.Logger) (retErr error) {
 		return errs.Wrap(errs.CodeInternal, "montar evidence shard set", err)
 	}
 	bInput.EvidenceHash = shardSet.Hash()
+
+	// SAI-138: wiring dos 5 analyzers determinísticos (Sonar/Lighthouse/
+	// Security/k6/Coverage) — cada gate decide applicability sobre o diff
+	// real antes de rodar exec/rede; skip nunca fabrica score.
+	changedPaths := diffPaths(diffFiles)
+	bInput.Analyzers = buildAnalyzers(ctx, cfg, *dir, changedPaths, hasMigrationChanges(changedPaths), hasEnvChanges(changedPaths), logger)
+
+	// Wiring de git.commits[]/git.changed_files[]/migrations[] — antes
+	// disso nenhum dos 3 arrays era populado em produção (só na fixture
+	// estática), gap documentado em docs/dashboard-gap-mapping.md §9/§10/§13.
+	rng := *base + ".." + *head
+	if commits, cErr := buildCommits(*dir, rng); cErr != nil {
+		logger.Warn("git log falhou, commits[] fica vazio", "err", cErr)
+	} else {
+		bInput.Git.Commits = commits
+	}
+	changes, chErr := gitx.Changes(*dir, rng, gitx.ChangesOpts{RenameDetection: cfg.Git.RenameDetection, CopyDetection: cfg.Git.CopyDetection})
+	if chErr != nil {
+		logger.Warn("git diff --numstat falhou, changed_files[]/migrations[] ficam vazios", "err", chErr)
+	} else {
+		bInput.Git.ChangedFiles = buildChangedFiles(changes)
+		bInput.Migrations = buildMigrations(*dir, changes, cfg.Detectors)
+	}
 
 	// SAI-129B: heurística determinística de applicability roda 1x sobre
 	// o diff bruto, ANTES de qualquer peer — mesmo sinal pros dois (mesmo
@@ -213,8 +238,6 @@ func runRun(args []string, env Env, logger *slog.Logger) (retErr error) {
 	}
 	provider := ai.NewOpenAIProvider(host, os.Getenv(keyEnv)).WithProviderName("9router")
 	timeout := time.Duration(cfg.AI.ExternalProvider.RequestTimeoutSeconds) * time.Second
-
-	ctx := context.Background()
 
 	// --- peer_a ---
 	var peerARes *peer.ExecutorResult
@@ -409,8 +432,13 @@ func runRun(args []string, env Env, logger *slog.Logger) (retErr error) {
 		bInput.Limitations = append(bInput.Limitations, "review_summary: "+summary)
 	}
 	bInput.QualityGate = report.QualityGate{
-		Status: gateRes.Subgates.Quality.Status,
-		Rules:  []report.GateRule{{ID: "G1", Status: gateRes.Subgates.Quality.Status, Message: gateRes.Subgates.Quality.Reason}},
+		// Status combinado (gateRes.Status), não só o subgate de quality: G2
+		// (independence) também é regra deste gate e pode reprovar sozinho.
+		Status: gateRes.Status,
+		Rules: []report.GateRule{
+			{ID: "G1", Status: gateRes.Subgates.Quality.Status, Message: gateRes.Subgates.Quality.Reason, Blocking: gateRes.Subgates.Quality.Blocking},
+			{ID: "G2", Status: gateRes.Subgates.Independence.Status, Message: gateRes.Subgates.Independence.Reason, Blocking: gateRes.Subgates.Independence.Blocking},
+		},
 	}
 	bInput.IndependenceGate = &report.IndependenceGate{
 		Status: gateRes.Subgates.Independence.Status, Reason: gateRes.Subgates.Independence.Reason,
@@ -418,7 +446,10 @@ func runRun(args []string, env Env, logger *slog.Logger) (retErr error) {
 	}
 	bInput.FinalGate = &report.FinalGate{
 		Status: gateRes.Status, Reason: gateRes.Reason,
-		Rules: []report.GateRule{{ID: "G1", Status: gateRes.Subgates.Quality.Status}, {ID: "G2", Status: gateRes.Subgates.Independence.Status}},
+		Rules: []report.GateRule{
+			{ID: "G1", Status: gateRes.Subgates.Quality.Status, Blocking: gateRes.Subgates.Quality.Blocking},
+			{ID: "G2", Status: gateRes.Subgates.Independence.Status, Blocking: gateRes.Subgates.Independence.Blocking},
+		},
 	}
 
 	rep, berr := report.NewBuilder(bInput).Build()

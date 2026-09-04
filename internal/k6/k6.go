@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 )
@@ -247,34 +248,80 @@ func msToDuration(ms float64) time.Duration {
 	return time.Duration(ms * float64(time.Millisecond))
 }
 
-// RunK6 placeholder — execução real requer k6 binário. Esta função
-// valida config e retorna command string que caller executa.
-func RunK6(ctx context.Context, rc RunConfig) (string, error) {
+// RunResult — saída de uma execução real de k6.
+type RunResult struct {
+	Summary *Summary
+	Output  string // stdout+stderr, pra diagnóstico em caso de falha
+}
+
+// RunK6 escreve o script em arquivo temp e executa via binário local ou
+// container docker (grafana/k6), depois lê o summary JSON exportado.
+// Caller é responsável por validar o target (zap.TargetGuard) ANTES de
+// chamar esta função — RunK6 não valida allowlist/prod.
+func RunK6(ctx context.Context, rc RunConfig) (*RunResult, error) {
 	if rc.Script == nil {
-		return "", errors.New("k6: script nil")
+		return nil, errors.New("k6: script nil")
 	}
 	if rc.Target == "" {
-		return "", errors.New("k6: target vazio")
+		return nil, errors.New("k6: target vazio")
 	}
+
+	scriptFile, err := os.CreateTemp("", "solidify-k6-*.js")
+	if err != nil {
+		return nil, fmt.Errorf("k6: script temp: %w", err)
+	}
+	scriptPath := scriptFile.Name()
+	defer os.Remove(scriptPath)
+	if _, err := scriptFile.Write(rc.Script); err != nil {
+		_ = scriptFile.Close()
+		return nil, fmt.Errorf("k6: write script: %w", err)
+	}
+	_ = scriptFile.Close()
+
+	outPath := rc.Out
+	if outPath == "" {
+		outFile, err := os.CreateTemp("", "solidify-k6-summary-*.json")
+		if err != nil {
+			return nil, fmt.Errorf("k6: summary temp: %w", err)
+		}
+		outPath = outFile.Name()
+		_ = outFile.Close()
+		defer os.Remove(outPath)
+	}
+
+	var cmd *exec.Cmd
 	switch rc.Mode {
 	case ModeBinary:
 		bin := rc.Bin
 		if bin == "" {
 			bin = "k6"
 		}
-		out := rc.Out
-		if out == "" {
-			out = "k6-summary.json"
-		}
-		return fmt.Sprintf("%s run --summary-export=%s", bin, out), nil
+		cmd = exec.CommandContext(ctx, bin, "run", "--summary-export="+outPath, scriptPath)
 	case ModeContainer:
-		out := rc.Out
-		if out == "" {
-			out = "/tmp/k6-summary.json"
-		}
-		return fmt.Sprintf("docker run --rm -i grafana/k6 run --summary-export=%s", out), nil
+		dir := "/scripts"
+		cmd = exec.CommandContext(ctx, "docker", "run", "--rm", "-i",
+			"-v", scriptPath+":"+dir+"/script.js",
+			"-v", outPath+":"+dir+"/summary.json",
+			"grafana/k6", "run", "--summary-export="+dir+"/summary.json", dir+"/script.js")
+	default:
+		return nil, fmt.Errorf("k6: mode inválido: %s", rc.Mode)
 	}
-	return "", fmt.Errorf("k6: mode inválido: %s", rc.Mode)
+
+	out, runErr := cmd.CombinedOutput()
+	// k6 sai com exit code != 0 quando thresholds falham — não é erro de
+	// execução, o summary ainda foi escrito; só falha se summary não existir.
+	data, readErr := os.ReadFile(outPath)
+	if readErr != nil {
+		if runErr != nil {
+			return nil, fmt.Errorf("k6: execução falhou: %w: %s", runErr, string(out))
+		}
+		return nil, fmt.Errorf("k6: summary não gerado: %w", readErr)
+	}
+	summary, err := ParseK6SummaryJSON(data)
+	if err != nil {
+		return nil, err
+	}
+	return &RunResult{Summary: summary, Output: string(out)}, nil
 }
 
 // PrioritizeEndpoints atribui peso — defaults 1.0, change endpoints

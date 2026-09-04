@@ -144,6 +144,7 @@ type Analyzers struct {
 	Security   SecurityAnalyzer   `json:"security"`
 	Lighthouse LighthouseAnalyzer `json:"lighthouse"`
 	Load       LoadAnalyzer       `json:"load"`
+	Coverage   CoverageAnalyzer   `json:"coverage"`
 }
 
 // TestsAnalyzer configura o test runner (SAI-030).
@@ -177,6 +178,7 @@ type SecurityAnalyzer struct {
 // LighthouseAnalyzer configura o Lighthouse (SAI-044).
 type LighthouseAnalyzer struct {
 	Enabled    bool                 `json:"enabled"`
+	Mode       string               `json:"mode"` // cli|docker
 	Categories LighthouseCategories `json:"categories"`
 }
 
@@ -194,10 +196,32 @@ func (c LighthouseCategories) Sum() int {
 }
 
 // LoadAnalyzer configura o k6 (SAI-047).
+//
+// AllowProd só deve ser true num arquivo solidify.json versionado e revisado —
+// nunca aceitar via flag/override (rodar load test contra produção sem
+// intenção explícita commitada é o tipo de acidente que este campo previne).
 type LoadAnalyzer struct {
-	Enabled                   bool   `json:"enabled"`
-	DefaultMode               string `json:"default_mode"`
-	RequireThresholdsForScore bool   `json:"require_thresholds_for_score"`
+	Enabled                   bool    `json:"enabled"`
+	DefaultMode               string  `json:"default_mode"` // smoke|load|stress|soak
+	Mode                      string  `json:"mode"`          // binary|container|disabled
+	RequireThresholdsForScore bool    `json:"require_thresholds_for_score"`
+	ScriptPath                string  `json:"script_path,omitempty"` // vazio = smoke script auto-gerado
+	VUs                       int     `json:"vus"`
+	DurationSeconds           int     `json:"duration_seconds"`
+	ThresholdP95MS            int     `json:"threshold_p95_ms"`
+	ThresholdP99MS            int     `json:"threshold_p99_ms"`
+	MaxErrorRate              float64 `json:"max_error_rate"`
+	AllowProd                 bool    `json:"allow_prod"`
+}
+
+// CoverageAnalyzer configura leitura de relatório de cobertura pré-gerado.
+// Nunca executa `go test -cover` (responsabilidade do TestsAnalyzer) — só lê
+// ReportPath se existir.
+type CoverageAnalyzer struct {
+	Enabled    bool    `json:"enabled"`
+	Threshold  float64 `json:"threshold"`
+	ReportPath string  `json:"report_path,omitempty"`
+	Format     string  `json:"format"` // lcov|cobertura|auto
 }
 
 // AI configura peers, provider e prompts.
@@ -396,9 +420,14 @@ func Default() Config {
 			},
 			Lighthouse: LighthouseAnalyzer{
 				Enabled:    true,
+				Mode:       "cli",
 				Categories: LighthouseCategories{Performance: 50, Accessibility: 25, BestPractices: 25, SEO: 0},
 			},
-			Load: LoadAnalyzer{Enabled: true, DefaultMode: "smoke", RequireThresholdsForScore: true},
+			Load: LoadAnalyzer{
+				Enabled: true, DefaultMode: "smoke", Mode: "binary", RequireThresholdsForScore: true,
+				VUs: 10, DurationSeconds: 30, ThresholdP95MS: 500, ThresholdP99MS: 1000, MaxErrorRate: 0.01,
+			},
+			Coverage: CoverageAnalyzer{Enabled: true, Threshold: 70, Format: "auto"},
 		},
 		AI: AI{
 			PeerA: PeerA{Source: "terminal-mcp"},

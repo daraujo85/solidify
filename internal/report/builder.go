@@ -136,7 +136,14 @@ type Migration struct {
 	Operations      []map[string]any `json:"operations"`
 	RollbackPresent *bool            `json:"rollback_present,omitempty"`
 	Risk            string           `json:"risk"`
-	EvidenceRefs    []string         `json:"evidence_refs,omitempty"`
+	// Impacto: enum de 3 níveis (Baixo/Médio/Alto) do contrato de dados
+	// §13, projetado do RiskLevel já calculado por
+	// internal/migrations.Assess (ver migrations.ImpactForFindings).
+	// String livre aqui (não o tipo migrations.Impact) pra não acoplar
+	// este pacote a internal/migrations. Vazio = sem achado suficiente
+	// pra opinar; nunca um default fabricado.
+	Impacto      string   `json:"impacto,omitempty"`
+	EvidenceRefs []string `json:"evidence_refs,omitempty"`
 }
 
 // EnvChange info.
@@ -303,6 +310,7 @@ type GateRule struct {
 	ID           string   `json:"id"`
 	Status       string   `json:"status"`
 	Message      string   `json:"message"`
+	Blocking     bool     `json:"blocking"`
 	EvidenceRefs []string `json:"evidence_refs,omitempty"`
 }
 

@@ -282,6 +282,49 @@ func (c Config) validateAnalyzers() error {
 			"modo inválido: "+quote(c.Analyzers.Load.DefaultMode)).
 			WithHint("use smoke, load, stress ou soak")
 	}
+	switch c.Analyzers.Load.Mode {
+	case "", "binary", "container", "disabled":
+	default:
+		return invalid("analyzers.load.mode",
+			"modo inválido: "+quote(c.Analyzers.Load.Mode)).
+			WithHint("use binary, container ou disabled")
+	}
+	if c.Analyzers.Load.VUs < 0 {
+		return invalid("analyzers.load.vus", "valor não pode ser negativo")
+	}
+	if c.Analyzers.Load.DurationSeconds < 0 {
+		return invalid("analyzers.load.duration_seconds", "valor não pode ser negativo")
+	}
+	if c.Analyzers.Load.MaxErrorRate < 0 || c.Analyzers.Load.MaxErrorRate > 1 {
+		return invalid("analyzers.load.max_error_rate", "valor deve estar entre 0 e 1")
+	}
+	if c.Analyzers.Load.AllowProd && len(c.Analyzers.Security.ActiveTargetAllowlist) == 0 {
+		// Não é bloqueio duro (k6 usa TargetGuard próprio, não a allowlist de
+		// security), só sinaliza config suspeita: allow_prod=true sem qualquer
+		// allowlist declarada em lugar nenhum do arquivo é provável acidente.
+		return invalid("analyzers.load.allow_prod",
+			"allow_prod=true exige ao menos um target declarado em analyzers.security.active_target_allowlist").
+			WithHint("load test contra produção deve ser intenção explícita e revisada, nunca default")
+	}
+
+	switch c.Analyzers.Lighthouse.Mode {
+	case "", "cli", "docker":
+	default:
+		return invalid("analyzers.lighthouse.mode",
+			"modo inválido: "+quote(c.Analyzers.Lighthouse.Mode)).
+			WithHint("use cli ou docker")
+	}
+
+	if c.Analyzers.Coverage.Threshold < 0 || c.Analyzers.Coverage.Threshold > 100 {
+		return invalid("analyzers.coverage.threshold", "valor deve estar entre 0 e 100")
+	}
+	switch c.Analyzers.Coverage.Format {
+	case "", "lcov", "cobertura", "auto":
+	default:
+		return invalid("analyzers.coverage.format",
+			"formato inválido: "+quote(c.Analyzers.Coverage.Format)).
+			WithHint("use lcov, cobertura ou auto")
+	}
 
 	for i, cmd := range c.Analyzers.Tests.Commands {
 		if len(cmd) == 0 {

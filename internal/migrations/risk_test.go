@@ -387,3 +387,61 @@ func TestRiskNoFindingsForHarmlessCreateTable(t *testing.T) {
 		t.Errorf("criação inofensiva não devia gerar findings: %+v", fs)
 	}
 }
+
+// Aceitação: ImpactForLevel/ImpactForFindings — enum de 3 níveis §13.
+func TestImpactForLevel(t *testing.T) {
+	cases := []struct {
+		level RiskLevel
+		want  Impact
+	}{
+		{RiskLow, ImpactLow},
+		{RiskModerate, ImpactMedium},
+		{RiskHigh, ImpactHigh},
+		{RiskCritical, ImpactHigh},
+		{RiskLevel("UNKNOWN"), Impact("")},
+	}
+	for _, c := range cases {
+		if got := ImpactForLevel(c.level); got != c.want {
+			t.Errorf("ImpactForLevel(%q) = %q, want %q", c.level, got, c.want)
+		}
+	}
+}
+
+func TestImpactForFindingsNoFindingsIsEmpty(t *testing.T) {
+	if got := ImpactForFindings(nil); got != Impact("") {
+		t.Errorf("sem findings devia ser \"\" (sem fabricar default), got %q", got)
+	}
+}
+
+func TestImpactForFindingsAddColumnIsBaixo(t *testing.T) {
+	// "add column nullable" = ADD_COLUMN LOW -> Baixo (contrato §13).
+	m := Migration{Framework: GenericSQL, Path: "db/migrations/0032_add_query_index.sql"}
+	ops := []Operation{{Type: OpAdd, Object: "orders", Detail: "note",
+		Raw: "ALTER TABLE orders ADD COLUMN note TEXT"}}
+	fs := Assess(m, ops)
+	if got := ImpactForFindings(fs); got != ImpactLow {
+		t.Errorf("ADD COLUMN nullable devia ser Baixo, got %q (findings=%+v)", got, fs)
+	}
+}
+
+func TestImpactForFindingsDropTableIsAlto(t *testing.T) {
+	// DROP TABLE = DROP_OBJECT CRITICAL -> Alto (pior finding vence).
+	m := Migration{Framework: GenericSQL, Path: "db/migrations/0040_drop_legacy.sql"}
+	ops := []Operation{{Type: OpDrop, Object: "legacy", Detail: "TABLE",
+		Raw: "DROP TABLE legacy"}}
+	fs := Assess(m, ops)
+	if got := ImpactForFindings(fs); got != ImpactHigh {
+		t.Errorf("DROP TABLE devia ser Alto, got %q (findings=%+v)", got, fs)
+	}
+}
+
+func TestImpactForFindingsRenameIsMedio(t *testing.T) {
+	// RENAME = RENAME_BREAKING MODERATE -> Médio.
+	m := Migration{Framework: GenericSQL, Path: "db/migrations/0041_rename.sql"}
+	ops := []Operation{{Type: OpRename, Object: "orders", Detail: "old_orders",
+		Raw: "ALTER TABLE old_orders RENAME TO orders"}}
+	fs := Assess(m, ops)
+	if got := ImpactForFindings(fs); got != ImpactMedium {
+		t.Errorf("RENAME devia ser Médio, got %q (findings=%+v)", got, fs)
+	}
+}

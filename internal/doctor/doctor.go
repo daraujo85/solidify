@@ -15,6 +15,7 @@ import (
 
 	"github.com/diegoaraujo/solidify/internal/ai"
 	"github.com/diegoaraujo/solidify/internal/config"
+	"github.com/diegoaraujo/solidify/internal/sonar"
 )
 
 // CheckResult resultado de um check.
@@ -37,6 +38,13 @@ var AllChecks = []string{
 	"9router",
 	"peer_review_canary",
 	"peer_review_store_v1",
+	"k6",
+	"lighthouse",
+	"semgrep",
+	"gitleaks",
+	"osv-scanner",
+	"sonar-scanner",
+	"zap",
 }
 
 // RunCheck roda 1 check por nome.
@@ -58,6 +66,20 @@ func RunCheck(name string) CheckResult {
 		return checkPeerReviewCanary()
 	case "peer_review_store_v1":
 		return checkPeerReviewStoreV1()
+	case "k6":
+		return checkBinary("k6", "k6")
+	case "lighthouse":
+		return checkBinary("lighthouse", "lighthouse")
+	case "semgrep":
+		return checkBinary("semgrep", "semgrep")
+	case "gitleaks":
+		return checkBinary("gitleaks", "gitleaks")
+	case "osv-scanner":
+		return checkBinary("osv-scanner", "osv-scanner")
+	case "sonar-scanner":
+		return checkSonarScanner()
+	case "zap":
+		return checkZAP()
 	default:
 		return CheckResult{Name: name, OK: false, Message: "check desconhecido"}
 	}
@@ -201,6 +223,33 @@ func check9Router() CheckResult {
 		return CheckResult{Name: "9router", OK: false, Message: "status " + resp.Status}
 	}
 	return CheckResult{Name: "9router", OK: true, Message: "OK " + probeURL + " (" + resp.Status + ")"}
+}
+
+// checkBinary é o padrão comum dos analyzers opcionais: sem o binário no
+// PATH, o analyzer correspondente fica "skipped:tool_unavailable" no
+// report — este check é o único jeito do usuário descobrir o motivo.
+func checkBinary(name, bin string) CheckResult {
+	if _, err := exec.LookPath(bin); err != nil {
+		return CheckResult{Name: name, OK: false, Message: bin + " não encontrado no PATH"}
+	}
+	return CheckResult{Name: name, OK: true, Message: bin + " disponível"}
+}
+
+func checkSonarScanner() CheckResult {
+	if _, bin, ok := sonar.Available(); ok {
+		return CheckResult{Name: "sonar-scanner", OK: true, Message: bin + " disponível"}
+	}
+	return CheckResult{Name: "sonar-scanner", OK: false, Message: "sonar-scanner/sonar-scanner-cli não encontrado no PATH"}
+}
+
+func checkZAP() CheckResult {
+	if _, err := exec.LookPath("zap-baseline.py"); err == nil {
+		return CheckResult{Name: "zap", OK: true, Message: "zap-baseline.py disponível"}
+	}
+	if _, err := exec.LookPath("zap.sh"); err == nil {
+		return CheckResult{Name: "zap", OK: true, Message: "zap.sh disponível"}
+	}
+	return CheckResult{Name: "zap", OK: false, Message: "zap-baseline.py/zap.sh não encontrado no PATH"}
 }
 
 // ErrCheckFailed check falhou.
