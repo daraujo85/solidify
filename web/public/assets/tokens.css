@@ -1,95 +1,111 @@
-/* Design tokens (SAI-081) — print-friendly, no Tailwind. */
+/* Design tokens — espelha à risca CONTRATO-DE-DADOS.md § Design system. */
+
+/* ponytail: Plus Jakarta Sans / IBM Plex Mono não estão vendored (ADR-0074
+   veda CDN). Fallback de system-stack até os arquivos de fonte serem
+   adicionados em web/public/assets/fonts/ + @font-face aqui. */
 :root {
-  --bg: #fafbfc;
-  --fg: #1f2933;
-  --muted: #5b6b7c;
-  --accent: #2c5282;
-  --pass: #2f855a;
-  --warn: #c05621;
-  --fail: #c53030;
-  --blocked: #6b46c1;
-  --incomplete: #718096;
-  --card: #ffffff;
-  --border: #e2e8f0;
-  --gap: 16px;
-  --radius: 6px;
-  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-}
+  --font-ui: "Plus Jakarta Sans", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1a202c;
-    --fg: #f7fafc;
-    --muted: #a0aec0;
-    --card: #2d3748;
-    --border: #4a5568;
-  }
-}
+  /* Superfícies */
+  --bg: #f4f7fb;
+  --surface: #ffffff;
+  --surface-subtle: #fafbfd;
+  --surface-subtle-2: #fcfdfe;
+  --border-card: #e7ecf3;
+  --divider-strong: #eef2f7;
+  --divider-weak: #f2f5f9;
 
-* { box-sizing: border-box; }
-body {
-  margin: 0;
-  font-family: var(--font);
-  background: var(--bg);
-  color: var(--fg);
-}
-.bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 20px;
-  background: var(--card);
-  border-bottom: 1px solid var(--border);
-}
-.bar h1 { font-size: 18px; margin: 0; }
-.bar nav a {
-  margin-left: 12px;
-  color: var(--accent);
-  text-decoration: none;
-}
-main {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 20px;
-}
-.card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
-  margin-bottom: var(--gap);
-}
-.row { display: flex; gap: var(--gap); flex-wrap: wrap; }
-.col { flex: 1; min-width: 240px; }
-.badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 600;
-}
-.badge.PASS       { background: var(--pass); color: white; }
-.badge.WARN       { background: var(--warn); color: white; }
-.badge.FAIL       { background: var(--fail); color: white; }
-.badge.BLOCKED    { background: var(--blocked); color: white; }
-.badge.INCOMPLETE { background: var(--incomplete); color: white; }
-.score { font-size: 32px; font-weight: 700; font-family: var(--mono); }
-.muted { color: var(--muted); font-size: 13px; }
-ul.bullets { margin: 0; padding-left: 20px; }
-ul.bullets li { margin: 4px 0; }
-pre.code {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  padding: 12px;
-  border-radius: 4px;
-  overflow-x: auto;
-  font-family: var(--mono);
-  font-size: 13px;
+  /* Texto */
+  --text-title: #0f172a;
+  --text-label-strong: #26334a;
+  --text-value: #3d4a60;
+  --text-body: #4b5768;
+  --text-support: #6b7789;
+  --text-label: #8d99ad;
+  --text-axis: #9aa6ba;
+
+  /* Navegação (sidebar) */
+  --nav-bg: #0d1526;
+  --nav-item: #aab6cd;
+  --nav-item-hover: #17223a;
+  --nav-active-bg: #1d4ed8;
+  --nav-active-fg: #ffffff;
+  --nav-help-bg: #141f36;
+  --nav-help-border: #22304d;
+  --nav-divider: #1e2a44;
+  --nav-footer: #6f80a0;
+
+  /* Semânticas: par texto forte + fundo claro */
+  --ok-text: #15803d;
+  --ok-text-2: #166534;
+  --ok-icon: #16a34a;
+  --ok-bg: #e9f8ef;
+  --ok-bg-2: #eef9f2;
+
+  --warn-text: #92400e;
+  --warn-text-2: #c2410c;
+  --warn-icon: #d97706;
+  --warn-icon-2: #f97316;
+  --warn-bg: #fef6e7;
+  --warn-bg-2: #fff3e8;
+
+  --fail-text: #b91c1c;
+  --fail-icon: #dc2626;
+  --fail-bg: #fdecec;
+
+  --neutral-text: #3d4a60;
+  --neutral-icon: #cbd5e1;
+  --neutral-bg: #f1f4f9;
+
+  --primary-fg: #ffffff;
+  --primary-bg: #1d4ed8;
+  --primary-bg-hover: #1739a8;
+
+  --link: #1d4ed8;
+  --link-hover: #1739a8;
+
+  /* Princípios SOLID — cor fixa, nunca muda de lugar */
+  --srp: #2563eb; --srp-bg: #eaf0fe;
+  --ocp: #7c3aed; --ocp-bg: #f3eefe;
+  --lsp: #f97316; --lsp-bg: #fff3e8;
+  --isp: #0d9488; --isp-badge: #0f766e; --isp-bg: #e6f6f4;
+  --dip: #db2777; --dip-badge: #be185d; --dip-bg: #fdeef5;
+
+  /* Ferramentas */
+  --tool-sonar: #0284c7; --tool-sonar-bg: #e8f4fd;
+  --tool-lighthouse: #ea580c; --tool-lighthouse-bg: #fdeee8;
+  --tool-zap: #4338ca; --tool-zap-bg: #eceefe;
+  --tool-k6: #7c3aed; --tool-k6-bg: #f3eefe;
+
+  /* Espaçamento — grade 4px */
+  --space-4: 4px; --space-6: 6px; --space-8: 8px; --space-9: 9px;
+  --space-10: 10px; --space-11: 11px; --space-13: 13px; --space-14: 14px;
+  --space-16: 16px; --space-18: 18px; --space-22: 22px; --space-26: 26px;
+  --card-gap: 16px;
+  --page-padding: 22px 26px 26px;
+
+  /* Raio */
+  --radius-card: 14px;
+  --radius-card-inner: 12px;
+  --radius-block: 10px;
+  --radius-button: 9px;
+  --radius-badge-square: 8px;
+  --radius-badge-sm: 6px;
+  --radius-pill: 999px;
+  --radius-avatar: 50%;
+
+  /* Sombra — praticamente nenhuma */
+  --shadow-button: 0 1px 2px rgba(16, 30, 60, 0.05);
+  --shadow-analyzers: 0 2px 10px rgba(16, 30, 60, 0.05);
+
+  /* Sidebar/layout */
+  --sidebar-width: 196px;
+  --topbar-min-height: 66px;
 }
 
 @media print {
-  .bar { display: none; }
-  main { max-width: 100%; }
+  .sidebar, .topbar { display: none; }
+  main { max-width: 100%; flex-basis: 100%; }
   .card { break-inside: avoid; border: 1px solid #999; }
 }

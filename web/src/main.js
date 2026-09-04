@@ -2,8 +2,52 @@
 // Single-file Preact-equivalent: vanilla JS + DOM diffing manual.
 // Sem build step no runtime — browser parseia direto.
 
+import {
+  mapSonarSection, mapLighthouseSection, mapK6Section,
+  mapSecuritySection, mapCoverageSection, mapAnalyzersStrip, mapApplicability,
+  mapSolidPrinciples, mapTopbar, mapSustainability,
+  scoreClass, severityClass, gateVerdict,
+} from "./mapping.js";
+import { el, badge, emptyCard, animateNumber, animateWidth, gaugeTile, svgIcon } from "./dom.js";
+import {
+  viewGateSection, viewViolations, viewRiskFiles, viewDeliveries,
+  viewChangedFiles, viewMigrations, viewEnvs, viewAIReviewers,
+  viewApplicability, viewSummary, viewFooter,
+} from "./views/release.js";
+import { hydrateMockup } from "./hydrate.js";
+
 const root = document.getElementById("root");
+const runNav = document.getElementById("runNav");
 const hash = () => location.hash.replace(/^#\/?/, "") || "runs";
+
+// Sub-nav de âncoras — só existe na página de run (§ da Fase A2).
+// ponytail: sem scrollspy (destacar item ativo ao rolar); upgrade se pedirem.
+function clearRunNav() { while (runNav.firstChild) runNav.removeChild(runNav.firstChild); }
+function paintRunNav(items) {
+  clearRunNav();
+  for (const [id, label] of items) {
+    runNav.appendChild(el("a", {
+      href: "#",
+      onclick: (e) => { e.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }); },
+    }, label));
+  }
+}
+
+// Variante da sub-nav pra página de run em modo mockup (§ mockup real via
+// iframe) — âncoras apontam pra data-dc-tpl dentro do iframe, não IDs do
+// document principal.
+function paintRunNavTpl(iframeDoc, items) {
+  clearRunNav();
+  for (const [tpl, label] of items) {
+    runNav.appendChild(el("a", {
+      href: "#",
+      onclick: (e) => {
+        e.preventDefault();
+        iframeDoc.querySelector(`[data-dc-tpl="${tpl}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      },
+    }, label));
+  }
+}
 
 async function loadRun(runID) {
   const r = await fetch(`/api/run/${encodeURIComponent(runID)}`);
@@ -24,34 +68,11 @@ async function loadTrend() {
   return r.json();
 }
 
-function el(tag, props, ...children) {
-  const e = document.createElement(tag);
-  if (props) {
-    for (const k in props) {
-      if (k === "class") e.className = props[k];
-      else if (k.startsWith("on")) e.addEventListener(k.slice(2), props[k]);
-      else e.setAttribute(k, props[k]);
-    }
-  }
-  for (const c of children) {
-    if (c == null) continue;
-    // SAI-129 (achado validação e2e): child não-Node (ex: número cru de
-    // "(arr||[]).length" em viewOverview) ia direto pro appendChild() e
-    // quebrava a página inteira (TypeError, sem stack visível). Qualquer
-    // primitivo vira texto; só Node passa direto.
-    if (c instanceof Node) e.appendChild(c);
-    else e.appendChild(document.createTextNode(String(c)));
-  }
-  return e;
-}
-
-function badge(status) {
-  return el("span", { class: "badge " + status }, status);
-}
-
 function score(n) {
   if (n == null || Number.isNaN(n)) return el("div", { class: "score na" }, "N/A");
-  return el("div", { class: "score" }, String(Math.round(n)));
+  const node = el("div", { class: "score" }, "0");
+  animateNumber(node, n, { decimals: 0, duration: 800 });
+  return node;
 }
 
 function viewRuns(runs) {
@@ -110,20 +131,49 @@ function viewGitHeader(r) {
   return wrap;
 }
 
+// Hero row (fidelidade ao mockup): score | grid SOLID unificado | sustentável.
+function scoreHeroCard(r) {
+  const quality = (typeof r.scores.quality === "number") ? r.scores.quality : null;
+  const verdict = gateVerdict(r.quality_gate.status);
+  return el("div", { class: "card card-score" },
+    el("div", { class: "card-header" }, "Release Quality Score"),
+    el("div", { class: "card-body" },
+      score(quality),
+      el("span", { class: "pill " + verdict.cls }, verdict.label),
+      el("p", { class: "muted" }, "grade ", r.scores.grade || "—"),
+      r.scores.score_status ? el("p", { class: "muted" }, "status: ", r.scores.score_status) : null));
+}
+
+const SHIELD_PATH = "M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z";
+function viewSustainCard(r) {
+  const s = mapSustainability(r);
+  if (s.empty) return null; // sem critério avaliado -> omite o card (nunca fabrica).
+  const verdict = gateVerdict(r.quality_gate.status);
+  return el("div", { class: "card card-sustain " + verdict.cls },
+    el("div", { class: "shield-icon" }, svgIcon(SHIELD_PATH)),
+    el("h3", null, s.title),
+    el("p", { class: "muted" }, s.message));
+}
+
 function viewOverview(r) {
   const wrap = el("div");
   wrap.appendChild(el("h2", null, "Overview — ", r.run.id));
+
+  const heroRow = el("div", { class: "row" },
+    el("div", { class: "col" }, scoreHeroCard(r)),
+    el("div", { class: "col col-wide" }, viewSolidGrid(r)));
+  const sustain = viewSustainCard(r);
+  if (sustain) heroRow.appendChild(el("div", { class: "col" }, sustain));
+  wrap.appendChild(heroRow);
+
   const row = el("div", { class: "row" });
   const gate = el("div", { class: "card col" },
     el("h3", null, "Quality gate"),
     badge(r.quality_gate.status),
-    el("p", { class: "muted" }, r.quality_gate.reason || ""));
-  const quality = (typeof r.scores.quality === "number") ? r.scores.quality : null;
-  const qual = el("div", { class: "card col" },
-    el("h3", null, "Score"),
-    score(quality),
-    el("p", { class: "muted" }, "grade ", r.scores.grade || "—"),
-    r.scores.score_status ? el("p", { class: "muted" }, "status: ", r.scores.score_status) : null);
+    // detalhe completo já vive no card "Gate de entrega" (mapGateSection);
+    // r.quality_gate.reason não sobrevive ao unmarshal real (QualityGate só
+    // tem Status+Rules em builder.go) — nunca fabricar aqui.
+    el("p", { class: "muted" }, (r.quality_gate.rules || []).length + " critério(s)"));
   const risk = el("div", { class: "card col" },
     el("h3", null, "Risk"),
     el("p", null, r.risk.level || "—"),
@@ -132,8 +182,7 @@ function viewOverview(r) {
     el("h3", null, "Confidence"),
     score(r.scores.confidence * 100),
     el("p", { class: "muted" }, r.scores.confidence_level));
-  row.appendChild(gate); row.appendChild(qual);
-  row.appendChild(risk); row.appendChild(conf);
+  row.appendChild(gate); row.appendChild(risk); row.appendChild(conf);
   wrap.appendChild(row);
 
   if ((r.risk.factors || []).length) {
@@ -155,58 +204,208 @@ function viewOverview(r) {
   return wrap;
 }
 
-function viewSOLID(r) {
-  const wrap = el("div");
-  wrap.appendChild(el("h2", null, "SOLID"));
-  const ps = r.solid.principles || {};
-  for (const k of ["S", "O", "L", "I", "D"]) {
-    const p = ps[k] || {};
-    const app = p.applicability || (p.applicable ? "APPLICABLE" : "NOT_APPLICABLE");
-    const scored = p.after_score != null && app === "APPLICABLE";
-    const scoreText = scored ? String(p.after_score) : "N/A";
-    const d = (typeof p.delta === "number") ? p.delta : 0;
-    const cls = scored ? "delta " + (d >= 0 ? "pos" : "neg") : "delta na";
-    const card = el("div", { class: "principle " + (scored ? "scored" : "na") },
-      el("strong", null, k),
-      el("span", { class: "app-badge " + app.toLowerCase().replace(/_/g, "-") }, app),
-      el("span", null, "score: ", scoreText),
-      el("span", { class: cls }, scored ? ((d >= 0 ? "+" : "") + d.toFixed(1)) : "—"));
-    if (p.reason) {
-      card.appendChild(el("p", { class: "reason muted" }, p.reason));
+// §4.1 Slider de aprovação: simulação local do limiar de score, NUNCA
+// persiste (contrato: "mudar o slider nunca deve gravar nada"). Sem
+// fetch/write — só recalcula texto no DOM a partir do state em memória.
+// Vive na topbar (layout do mockup), não mais dentro do card de overview.
+const DEFAULT_APPROVAL_LIMIT = 80; // [novo] no contrato: vem da política do repo; sem .solidify.yml exposto no report, usa default documentado.
+function approvalSliderControl(qualityScore) {
+  const out = el("span", { class: "muted" });
+  function paint(limit) {
+    const folga = qualityScore - limit;
+    out.textContent = folga >= 0
+      ? `Aprovado (simulado) — folga de ${folga.toFixed(0)} pts acima do limite ${limit}`
+      : `Reprovado pelo simulador — faltam ${Math.abs(folga).toFixed(0)} pts para o limite ${limit}`;
+  }
+  const slider = el("input", {
+    type: "range", min: "50", max: "100", value: String(DEFAULT_APPROVAL_LIMIT),
+    oninput: (e) => paint(Number(e.target.value)),
+  });
+  paint(DEFAULT_APPROVAL_LIMIT);
+  return el("div", { class: "topbar-slider" },
+    el("span", { class: "muted" }, "Aprovar com base em"), slider, out);
+}
+
+// Cabeçalho fixo (topbar): contexto git + slider de aprovação por run.
+// Fora do fluxo de render() do #root pra ficar sempre visível (mockup).
+// Campos = só o que mapTopbar expõe como real (sem project/PR/team — não
+// existem no Report hoje, ver mapping.js); cada campo some se ausente.
+function paintTopbar(r) {
+  const bar = document.getElementById("topbar");
+  while (bar.firstChild) bar.removeChild(bar.firstChild);
+  const t = mapTopbar(r);
+  bar.appendChild(el("span", { class: "page-title", style: "font-size:15px" },
+    t.profile || "run", " · ", t.runId || ""));
+  const fields = [
+    ["Release", t.headRef], ["Base", t.baseRef],
+    ["Commit", t.shortSha], ["Analisado em", t.finishedAt],
+  ].filter(([, v]) => v);
+  for (const [label, value] of fields) {
+    bar.appendChild(el("span", { class: "sep" }));
+    bar.appendChild(el("div", { class: "tb-field" },
+      el("span", { class: "tb-label" }, label), el("strong", null, value)));
+  }
+  const quality = (typeof r.scores.quality === "number") ? r.scores.quality : null;
+  if (quality != null) {
+    bar.appendChild(el("span", { class: "sep" }));
+    bar.appendChild(approvalSliderControl(quality));
+  }
+}
+
+function resetTopbar() {
+  const bar = document.getElementById("topbar");
+  while (bar.firstChild) bar.removeChild(bar.firstChild);
+  bar.appendChild(el("span", { class: "page-title", style: "font-size:15px" }, "Solidify Release Quality"));
+}
+
+// §3 Painel SOLIDIFY — grid único de 5 colunas, uma por princípio (refino
+// visual Fase A1: mockup mostra 1 card só com divisórias sutis entre itens,
+// não strip+lista separadas). Detalhe (razão/evidência) que antes vivia numa
+// 2ª renderização agora fica embutido como linha muted sob o item sem score.
+function viewSolidGrid(r) {
+  const items = mapSolidPrinciples(r);
+  const grid = el("div", { class: "solid-grid" });
+  for (const p of items) {
+    const scoreRow = el("div", { class: "solid-score" }, p.scored ? String(p.score) : "N/A",
+      el("small", null, p.scored ? "/100" : ""));
+    if (p.scored && p.delta != null) {
+      scoreRow.appendChild(el("span", { class: "delta " + (p.delta >= 0 ? "pos" : "neg") },
+        " " + (p.delta >= 0 ? "↑" : "↓") + Math.abs(p.delta).toFixed(1)));
     }
-    if (Array.isArray(p.evidence_refs) && p.evidence_refs.length) {
-      card.appendChild(el("p", { class: "evidence muted" }, "evidência: ", p.evidence_refs.join(", ")));
-    }
-    wrap.appendChild(card);
+    const bar = el("div", { class: "bar" });
+    if (p.scored) bar.appendChild(el("span", { class: scoreClass(p.score), style: "width:" + Math.max(0, Math.min(100, p.score)) + "%" }));
+    grid.appendChild(el("div", { class: "solid-item" },
+      el("div", { class: "top" },
+        el("div", { class: "solid-letter " + p.key.toLowerCase() }, p.key),
+        el("div", { class: "solid-name" }, el("b", null, p.code), p.label)),
+      scoreRow, bar,
+      !p.scored && p.reason ? el("p", { class: "muted small" }, p.reason) : null));
+  }
+  return el("div", { class: "card card-solid" },
+    el("div", { class: "card-header" }, "SOLIDIFY"),
+    el("div", { class: "card-body" }, grid));
+}
+
+function scoreCard(title, value, kind, extraRows) {
+  if (value == null) return emptyCard(title, null);
+  const wrap = el("div", { class: "card" },
+    el("div", { class: "card-header" }, title));
+  const body = el("div", { class: "card-body" });
+  const num = el("div", { class: "score", style: "font-size:32px" }, "0");
+  body.appendChild(num);
+  const track = el("div", { class: "progress-track" });
+  const fill = el("div", { class: "progress-fill " + scoreClass(value, kind) });
+  track.appendChild(fill);
+  body.appendChild(track);
+  for (const row of extraRows || []) body.appendChild(row);
+  wrap.appendChild(body);
+  animateNumber(num, value, { decimals: 0 });
+  animateWidth(fill, value);
+  return wrap;
+}
+
+// §11.1 Sonar
+function viewSonarSection(report) {
+  const s = mapSonarSection(report);
+  if (s.empty) return emptyCard("SonarQube", s.reason);
+  const m = s.metrics;
+  return scoreCard("SonarQube", s.score, "sonar", [
+    el("p", { class: "muted" }, "bugs: ", String(m.bugs ?? "—"),
+      " · vulnerabilities: ", String(m.vulnerabilities ?? "—"),
+      " · code smells: ", String(m.code_smells ?? "—")),
+  ]);
+}
+
+// §11.2 Lighthouse
+function viewLighthouseSection(report) {
+  const l = mapLighthouseSection(report);
+  if (l.empty) return emptyCard("Lighthouse", l.reason);
+  const wrap = el("div", { class: "card" }, el("div", { class: "card-header" }, "Lighthouse"));
+  const strip = el("div", { class: "kpi-strip" });
+  for (const [label, value] of [
+    ["Performance", l.performance], ["Acessibilidade", l.accessibility],
+    ["Boas práticas", l.best_practices], ["SEO", l.seo],
+  ]) {
+    strip.appendChild(gaugeTile(label, value, scoreClass(value, "lighthouse"), 3.6));
+  }
+  wrap.appendChild(strip);
+  return wrap;
+}
+
+// §12 Performance / Carga (k6)
+function viewK6Section(report) {
+  const k = mapK6Section(report);
+  if (k.empty) return emptyCard("Performance / Carga (k6)", k.reason);
+  const wrap = el("div", { class: "card full-width" }, el("div", { class: "card-header" }, "Performance / Carga (k6)"));
+  const strip = el("div", { class: "kpi-strip" });
+  for (const [label, value, unit] of [
+    ["p95", k.p95Ms, "ms"], ["p99", k.p99Ms, "ms"],
+    ["erro", (k.errorRate || 0) * 100, "%"], ["throughput", k.throughputRps, "rps"],
+  ]) {
+    const num = el("span", null, value == null ? "—" : "0");
+    const valueEl = el("div", { class: "value" }, num, unit ? el("span", { class: "muted" }, " " + unit) : null);
+    strip.appendChild(el("div", { class: "kpi-tile" }, el("div", { class: "label" }, label), valueEl));
+    if (value != null) animateNumber(num, value, { decimals: unit === "%" ? 1 : 0 });
+  }
+  wrap.appendChild(strip);
+  wrap.appendChild(el("p", { class: "muted" },
+    "thresholds: ", el("span", { class: "pill " + (k.passThresholds ? "ok" : "fail") }, k.passThresholds ? "PASS" : "FAIL")));
+  if ((k.thresholdFailed || []).length) {
+    const ul = el("ul", { class: "bullets" });
+    for (const t of k.thresholdFailed) ul.appendChild(el("li", null, t));
+    wrap.appendChild(ul);
   }
   return wrap;
 }
 
-function viewQuality(r) {
-  const wrap = el("div");
-  wrap.appendChild(el("h2", null, "Quality"));
+// §11 Segurança (gitleaks/osv-scanner/semgrep agregados)
+function viewSecuritySection(report) {
+  const sec = mapSecuritySection(report);
+  if (sec.empty) return emptyCard("Segurança", sec.reason);
+  const wrap = el("div", { class: "card" },
+    el("div", { class: "card-header" }, "Segurança",
+      el("span", { class: "pill " + (sec.gateAllow ? "ok" : "fail") }, sec.gateAllow ? "PASS" : "FAIL")));
+  const body = el("div", { class: "card-body" });
+  body.appendChild(el("p", { class: "muted" }, sec.gateReason || ""));
   const ul = el("ul", { class: "bullets" });
-  for (const f of r.analyzers || []) {
+  for (const f of sec.findings.slice(0, 10)) {
     ul.appendChild(el("li", null,
-      f.id, " — ", f.applicability,
-      " — ", String(f.duration_ms), "ms"));
+      el("span", { class: "pill " + severityClass(f.severity) }, f.severity),
+      " ", f.source, " — ", f.rule, " — ", f.file_path || ""));
   }
-  wrap.appendChild(ul);
+  body.appendChild(ul);
+  wrap.appendChild(body);
   return wrap;
 }
 
-function viewAI(r) {
-  const wrap = el("div");
-  wrap.appendChild(el("h2", null, "AI Review"));
-  wrap.appendChild(el("p", null, "mode: ", r.ai_review.mode,
-    " — peer reviewed: ", String(r.ai_review.peer_reviewed)));
-  const ul = el("ul", { class: "bullets" });
-  for (const a of r.ai_review.actors || []) {
-    ul.appendChild(el("li", null,
-      a.role, " — ", a.provider, "/", a.model_id,
-      " — status ", a.status));
+// §Coverage (não existe seção numerada própria no contrato — anexado a
+// maintainability; ver TODO em internal/app/run.go sobre pesos).
+function viewCoverageSection(report) {
+  const c = mapCoverageSection(report);
+  if (c.empty) return emptyCard("Coverage", c.reason);
+  return scoreCard("Coverage", c.linePct, "coverage", [
+    el("p", { class: "muted" }, String(c.linesCovered ?? "—"), "/", String(c.linesTotal ?? "—"), " linhas · threshold ", String(c.threshold ?? "—"), "%"),
+  ]);
+}
+
+// §5 Analisadores — faixa de transparência da análise, largura total,
+// única com sombra (analyzers-strip).
+function viewAnalyzersStrip(report) {
+  const items = mapAnalyzersStrip(report);
+  const wrap = el("div", { class: "card analyzers-strip full-width" },
+    el("div", { class: "card-header" }, "Analisadores"));
+  const body = el("div", { class: "card-body row" });
+  for (const it of items) {
+    const skipped = (it.executionStatus || "").startsWith("skipped");
+    body.appendChild(el("div", { class: "col" },
+      el("strong", null, it.id),
+      el("span", null, " — ", it.applicability),
+      skipped
+        ? el("p", { class: "muted" }, it.executionStatus)
+        : el("p", { class: "muted" }, "score ", it.score != null ? String(Math.round(it.score)) : "—",
+            " — ", String(it.durationMs || 0), "ms")));
   }
-  wrap.appendChild(ul);
+  wrap.appendChild(body);
   return wrap;
 }
 
@@ -304,12 +503,22 @@ function viewTrend(data) {
   return wrap;
 }
 
+function markActiveNav(route) {
+  const top = route.startsWith("run/") ? "runs" : route;
+  document.querySelectorAll("#nav a").forEach((a) => {
+    a.classList.toggle("active", a.dataset.route === top);
+  });
+}
+
 async function render() {
   const route = hash();
+  markActiveNav(route);
   // limpa DOM sem innerHTML (mitiga XSS).
   while (root.firstChild) root.removeChild(root.firstChild);
   try {
     if (route === "runs") {
+      resetTopbar();
+      clearRunNav();
       const runs = await loadRuns();
       root.appendChild(viewRuns(runs));
       return;
@@ -317,21 +526,67 @@ async function render() {
     if (route.startsWith("run/")) {
       const id = route.slice(4);
       const r = await loadRun(id);
-      root.appendChild(viewGitHeader(r));
-      root.appendChild(viewOverview(r));
-      root.appendChild(el("div", { class: "card" }, viewSOLID(r)));
-      root.appendChild(el("div", { class: "card" }, viewQuality(r)));
-      root.appendChild(el("div", { class: "card" }, viewAI(r)));
+      // Página de run usa o mockup real do Design Canvas via iframe (pedido
+      // explícito: "era pra ficar idêntico") — hidratado com dado real por
+      // data-dc-tpl (hydrate.js), em vez de recomposto em CSS/JS à mão.
+      // Topbar externo/anchors do app somem: o mockup já traz os próprios.
+      resetTopbar();
+      clearRunNav();
+      // scrolling="no" + overflow:hidden: o iframe NUNCA tem barra própria —
+      // só o document externo rola. Sem isso, entre o load e a 1ª medição de
+      // altura (ou se o conteúdo crescer depois, ex. fonte carregando), o
+      // iframe mostra sua própria scrollbar interna por cima da da página
+      // (2 barras verticais simultâneas — bug relatado).
+      const frame = el("iframe", {
+        src: "/assets/mockup-run.html",
+        scrolling: "no",
+        style: "width:100%;border:0;display:block;min-height:400px;overflow:hidden",
+      });
+      root.appendChild(frame);
+      await new Promise((resolve) => {
+        frame.addEventListener("load", () => {
+          const doc = frame.contentDocument;
+          // bundler decodifica async (gzip+base64) — espera um nó-marco
+          // aparecer antes de hidratar, com timeout de segurança.
+          const started = performance.now();
+          (function waitReady() {
+            if (doc.querySelector('[data-dc-tpl="129"]') || performance.now() - started > 8000) {
+              hydrateMockup(doc, r);
+              const resize = () => { frame.style.height = doc.documentElement.scrollHeight + "px"; };
+              resize();
+              // conteúdo pode crescer depois da 1ª medição (fonte carregando,
+              // reflow do grid SOLID) — reobserva e remede.
+              new ResizeObserver(resize).observe(doc.body);
+              paintRunNavTpl(doc, [
+                [129, "Visão Geral"], [227, "Gate de Entrega"], [305, "Analisadores (IA)"],
+                [401, "Violações SOLID"], [480, "Arquivos de risco"], [520, "Entregas"],
+                [546, "Arquivos alterados"], [599, "Segurança"], [640, "SonarQube"],
+                [728, "Lighthouse"], [833, "Performance (k6)"], [911, "Migrations"],
+                [931, "Envs"], [955, "Aplicabilidade"], [988, "Resumo"],
+              ]);
+              resolve();
+            } else {
+              requestAnimationFrame(waitReady);
+            }
+          })();
+        }, { once: true });
+      });
       return;
     }
     // SAI-125: rota peer-reviews mostra trend.
     if (route === "peer-reviews") {
+      resetTopbar();
+      clearRunNav();
       const trend = await loadTrend();
       root.appendChild(el("div", { class: "card" }, viewTrend(trend)));
       return;
     }
+    resetTopbar();
+    clearRunNav();
     root.appendChild(el("p", null, "Rota desconhecida: ", route));
   } catch (err) {
+    resetTopbar();
+    clearRunNav();
     root.appendChild(el("p", { class: "muted" }, "Erro: ", err.message));
   }
 }

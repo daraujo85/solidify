@@ -1,43 +1,305 @@
-/* App layout (SAI-081). */
-.grid { display: grid; gap: 16px; }
-.grid-2 { grid-template-columns: repeat(2, 1fr); }
-.grid-3 { grid-template-columns: repeat(3, 1fr); }
-.grid-4 { grid-template-columns: repeat(4, 1fr); }
+/* App layout + componentes (SAI-081, reformulado SAI-138 per CONTRATO-DE-DADOS.md). */
 
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text-body);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+p { text-wrap: pretty; }
+
+.layout { display: flex; min-height: 100vh; flex-wrap: wrap; }
+
+/* Sidebar fixa 196px — quebra pra largura total em tela estreita. */
+.sidebar {
+  flex: 0 1 196px;
+  min-width: 196px;
+  background: var(--nav-bg);
+  color: var(--nav-item);
+  display: flex;
+  flex-direction: column;
+}
 @media (max-width: 720px) {
-  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  .sidebar { flex: 1 1 100%; }
+}
+.sidebar .brand {
+  display: flex; align-items: center; gap: var(--space-8);
+  color: #fff; font-weight: 700; font-size: 14px;
+  padding: var(--space-16) var(--space-16) var(--space-10);
+}
+.sidebar nav a {
+  display: flex; align-items: center; gap: var(--space-10);
+  padding: var(--space-10) var(--space-16);
+  color: var(--nav-item);
+  text-decoration: none;
+  font-size: 12.5px;
+}
+.sidebar nav a svg.icon {
+  width: 15px; height: 15px; flex: 0 0 auto; opacity: 0.85;
+  stroke: currentColor; fill: none; stroke-width: 1.8;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.sidebar nav a:hover { background: var(--nav-item-hover); }
+.sidebar nav a.active { background: var(--nav-active-bg); color: var(--nav-active-fg); }
+.sidebar .help {
+  margin: var(--space-16);
+  padding: var(--space-14);
+  background: var(--nav-help-bg);
+  border: 1px solid var(--nav-help-border);
+  border-radius: var(--radius-block);
+  color: var(--nav-footer);
+}
+.sidebar .divider { border-top: 1px solid var(--nav-divider); margin: var(--space-8) 0; }
+
+/* Sub-nav de âncoras da página de run (Fase A2 — 1 painel, 17 §§ do
+   contrato como âncoras internas, nunca sub-rota). Populada via JS
+   só quando a rota é run/:id; some fora dela. */
+.run-nav { display: flex; flex-direction: column; }
+.run-nav a {
+  padding: var(--space-8) var(--space-16) var(--space-8) 30px;
+  color: var(--nav-item);
+  text-decoration: none;
+  font-size: 11.5px;
+  opacity: 0.85;
+}
+.run-nav a:hover { background: var(--nav-item-hover); opacity: 1; }
+
+main {
+  flex: 1 1 480px;
+  min-width: 0;
+  padding: var(--page-padding);
 }
 
-table { border-collapse: collapse; width: 100%; }
-th, td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; font-size: 14px; }
-th { font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; }
-
-.principle {
+/* Barra do topo — campos reais (mapTopbar), refino visual Fase A1. */
+.topbar {
+  min-height: var(--topbar-min-height);
+  background: var(--surface);
+  border-bottom: 1px solid var(--divider-strong);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  margin-bottom: 6px;
-  background: var(--bg);
+  flex-wrap: wrap;
+  padding: var(--space-10) var(--space-16);
+  gap: var(--space-16);
 }
-.principle .delta { font-family: var(--mono); font-size: 14px; }
-.principle .delta.pos { color: var(--pass); }
-.principle .delta.neg { color: var(--fail); }
+.topbar .meta { border-left: 1px solid var(--divider-weak); padding-left: var(--space-16); }
+.topbar .page-title { margin: 0; }
+.topbar .sep { width: 1px; height: 26px; background: var(--divider-strong); flex: 0 0 auto; }
+.tb-field { display: flex; flex-direction: column; gap: 3px; }
+.tb-field .tb-label { font-size: 11px; color: var(--text-label); }
+.tb-field strong { color: var(--text-title); font-size: 13px; font-weight: 600; font-family: var(--font-mono); }
+.topbar-slider { display: flex; align-items: center; gap: var(--space-8); margin-left: auto; }
+.topbar-slider input[type="range"] { width: 120px; }
 
-.kbd {
-  display: inline-block;
-  padding: 1px 6px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  font-family: var(--mono);
-  font-size: 12px;
+/* Linha de cards: 3 colunas de referência, auto-fit. */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--card-gap);
 }
+.row > .col { flex: 1 1 268px; min-width: 268px; }
+/* Card que vale 2 colunas — NUNCA grid-column:span (contrato explícito):
+   com auto-fit o span cria coluna implícita e o conteúdo vaza em tela estreita. */
+.row > .col-span-2 { flex: 0 1 calc(66.667% - 5.34px); min-width: 0; }
+/* Coluna mais larga da hero row (score | SOLID | sustain) — mesma regra: flex, nunca span. */
+.row > .col-wide { flex: 2 1 380px; min-width: 320px; }
 
-/* SAI-125: trend sparkline */
+/* Título de página */
+h1, .page-title { font-size: 23px; letter-spacing: -0.4px; font-weight: 700; color: var(--text-title); margin: 0 0 var(--space-16); }
+
+/* Card */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-card);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: 15px 18px;
+  border-bottom: 1px solid var(--divider-strong);
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--text-title);
+}
+.card-header .icon { width: 18px; height: 18px; flex: 0 0 auto; }
+.card-header .value { margin-left: auto; }
+.card-body { padding: var(--space-14) var(--space-18); flex: 1; }
+.card-footer {
+  padding: var(--space-13) var(--space-18);
+  border-top: 1px solid var(--divider-strong);
+  text-align: center;
+  background: var(--surface-subtle);
+}
+.card-footer a { color: var(--link); text-decoration: none; }
+.card-footer a:hover { color: var(--link-hover); }
+
+/* Analisadores — única faixa com sombra, pra se destacar. */
+.analyzers-strip {
+  box-shadow: var(--shadow-analyzers);
+  border-radius: var(--radius-card);
+}
+.analyzers-strip .card-header { font-size: 15px; }
+
+/* Faixas de largura total. */
+.full-width { flex-basis: 100%; }
+
+/* Selo / pill */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  border-radius: var(--radius-pill);
+  padding: 4px 9px;
+  line-height: 1;
+}
+.pill.lg { font-size: 11px; padding: 5px 11px; }
+.pill.ok { color: var(--ok-text); background: var(--ok-bg); }
+.pill.warn { color: var(--warn-text); background: var(--warn-bg); }
+.pill.fail { color: var(--fail-text); background: var(--fail-bg); }
+.pill.neutral { color: var(--neutral-text); background: var(--neutral-bg); }
+/* status legado do fetch de runs/quality-gate — mesma paleta semântica */
+.badge { display: inline-flex; align-items: center; font-size: 10.5px; font-weight: 700; border-radius: var(--radius-pill); padding: 4px 9px; }
+.badge.PASS, .badge.pass { color: var(--ok-text); background: var(--ok-bg); }
+.badge.WARN, .badge.warn { color: var(--warn-text); background: var(--warn-bg); }
+.badge.FAIL, .badge.fail, .badge.BLOCKED, .badge.blocked { color: var(--fail-text); background: var(--fail-bg); }
+.badge.INCOMPLETE, .badge.incomplete { color: var(--neutral-text); background: var(--neutral-bg); }
+
+/* Barra de progresso */
+.progress-track { background: #eef1f6; height: 5px; border-radius: 3px; overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 3px; }
+.progress-fill.ok { background: var(--ok-icon); }
+.progress-fill.warn { background: var(--warn-icon); }
+.progress-fill.fail { background: var(--fail-icon); }
+
+/* Medidor circular — viewBox 0 0 36 36, r=14. */
+.gauge-circular { width: 72px; height: 72px; }
+.gauge-circular .track { fill: none; stroke: #eef1f6; }
+.gauge-circular .value { fill: none; stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%; }
+.gauge-circular .value.ok { stroke: var(--ok-icon); }
+.gauge-circular .value.warn { stroke: var(--warn-icon); }
+.gauge-circular .value.fail { stroke: var(--fail-icon); }
+.gauge-circular .value.neutral { stroke: var(--neutral-text); }
+.gauge-wrap { position: relative; width: 72px; height: 72px; margin: 0 auto; }
+.gauge-wrap .gauge-value { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: var(--text-value); }
+.gauge-tile { display: flex; flex-direction: column; align-items: center; gap: var(--space-6); }
+.gauge-tile .label { text-align: center; }
+
+/* Faixa de KPIs */
+.kpi-strip { display: flex; flex-wrap: wrap; }
+.kpi-tile { flex: 1 1 180px; padding: var(--space-14) var(--space-16); border-left: 1px solid var(--divider-weak); }
+.kpi-tile:first-child { border-left: none; }
+.kpi-tile .label { font-size: 10.5px; color: var(--text-label); }
+.kpi-tile .value { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; color: var(--text-value); }
+.kpi-tile .ref { display: flex; align-items: center; gap: var(--space-6); font-size: 9.5px; color: var(--text-axis); }
+.kpi-tile .ref .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+
+/* Item de violação */
+.violation-item { display: flex; gap: var(--space-11); padding: var(--space-11) 0; border-bottom: 1px solid var(--divider-weak); }
+.violation-item .rail { flex: 0 0 4px; border-radius: 2px; }
+.violation-item .rail.fail { background: var(--fail-icon); }
+.violation-item .rail.warn { background: var(--warn-icon); }
+.violation-item .rail.ok { background: var(--ok-icon); }
+.violation-item .content { flex: 1; min-width: 0; }
+.violation-item .top-row { display: flex; align-items: center; gap: var(--space-8); }
+.violation-item .top-row .file-line { font-family: var(--font-mono); font-size: 11px; color: var(--text-support); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.violation-item .top-row .sha { flex: 0 0 auto; margin-left: auto; font-family: var(--font-mono); color: var(--text-axis); }
+.violation-item .title { font-size: 13px; font-weight: 700; color: var(--text-title); }
+.violation-item .desc { font-size: 11.5px; color: var(--text-body); }
+.violation-item .suggestion { display: flex; align-items: center; gap: var(--space-8); }
+.violation-item .suggestion .label { color: var(--ok-text); font-weight: 600; }
+.violation-item .suggestion .create-task { margin-left: auto; }
+
+/* Mini-gráfico de série — 6 barras */
+.mini-chart { display: flex; align-items: flex-end; gap: var(--space-4); height: 40px; }
+.mini-chart .bar { flex: 1; border-radius: 3px 3px 0 0; min-height: 4%; }
+.mini-chart .bar.prior { opacity: 0.4; }
+
+/* Gráfico de linha — viewBox 0 0 300 130, preserveAspectRatio="none".
+   Rótulos de eixo são HTML, nunca <text> dentro do SVG esticado. */
+.line-chart { width: 100%; display: block; }
+.line-chart .grid-line { stroke: #ece7f8; vector-effect: non-scaling-stroke; }
+.line-chart .base-line { stroke: #d9d2ee; vector-effect: non-scaling-stroke; }
+.line-chart .threshold-line { stroke: #f0b8b8; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
+.line-chart .series { stroke: #8b5cf6; stroke-width: 2; fill: none; vector-effect: non-scaling-stroke; }
+.line-chart-axis { display: flex; justify-content: space-between; font-size: 9.5px; color: var(--text-axis); }
+
+/* §3 SOLIDIFY — grid único de 5 colunas (refino visual Fase A1: substitui a
+   dupla strip+lista antiga). Divisórias sutis entre itens, sem borda por
+   item — igual ao mockup real (dashboard-real.html). */
+.card-solid .card-header { justify-content: center; letter-spacing: .25em; color: var(--tool-k6); font-size: 12.5px; }
+.solid-grid { display: flex; }
+.solid-item { flex: 1 1 0; padding: 0 var(--space-14); min-width: 0; }
+.solid-item + .solid-item { border-left: 1px solid var(--border-card); }
+.solid-item .top { display: flex; align-items: center; gap: var(--space-8); margin-bottom: 2px; }
+.solid-letter { width: 26px; height: 26px; border-radius: 7px; flex: 0 0 auto; font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+.solid-letter.s { background: var(--srp-bg); color: var(--srp); }
+.solid-letter.o { background: var(--ocp-bg); color: var(--ocp); }
+.solid-letter.l { background: var(--lsp-bg); color: var(--lsp); }
+.solid-letter.i { background: var(--isp-bg); color: var(--isp-badge); }
+.solid-letter.d { background: var(--dip-bg); color: var(--dip-badge); }
+.solid-name { font-size: 11px; color: var(--text-label); line-height: 1.2; }
+.solid-name b { display: block; color: var(--text-title); font-size: 12px; }
+.solid-score { font-size: 20px; font-weight: 700; margin: var(--space-4) 0 var(--space-6); }
+.solid-score small { font-size: 11px; font-weight: 500; color: var(--text-label); }
+.solid-score .delta { font-size: 11px; font-weight: 600; }
+.solid-score .delta.pos { color: var(--ok-text); }
+.solid-score .delta.neg { color: var(--fail-text); }
+.bar { height: 5px; border-radius: 3px; background: var(--divider-strong); overflow: hidden; }
+.bar > span { display: block; height: 100%; border-radius: 3px; }
+.bar > span.ok { background: var(--ok-icon); }
+.bar > span.warn { background: var(--warn-icon); }
+.bar > span.fail { background: var(--fail-icon); }
+.bar > span.neutral { background: var(--neutral-icon); }
+p.muted.small { font-size: 10.5px; margin: var(--space-4) 0 0; }
+
+/* Card "Qualidade Sustentável" — cor segue o veredicto real do gate. */
+.card-score .card-body { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; flex: 1; }
+.card-sustain { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: var(--space-6); padding: var(--space-18); }
+.card-sustain .shield-icon { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.card-sustain .shield-icon svg.icon { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.card-sustain h3 { font-size: 15px; margin: 0; color: var(--text-title); }
+.card-sustain p { margin: 0; }
+.card-sustain.ok .shield-icon { background: var(--ok-bg); color: var(--ok-icon); }
+.card-sustain.warn .shield-icon { background: var(--warn-bg); color: var(--warn-icon); }
+.card-sustain.fail .shield-icon { background: var(--fail-bg); color: var(--fail-icon); }
+.card-sustain.neutral .shield-icon { background: var(--neutral-bg); color: var(--neutral-text); }
+
+/* §4 Gate de entrega — grid de critérios (auto-fit, mesma regra de largura
+   mínima das 3 colunas de referência; nunca grid-column:span). */
+.gate-grid { display: flex; flex-wrap: wrap; gap: var(--card-gap); }
+.gate-criterion {
+  flex: 1 1 220px; min-width: 220px;
+  border: 1px solid var(--border-card); border-radius: var(--radius-card-inner);
+  padding: var(--space-11);
+}
+.gate-criterion .top-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-6); }
+.gate-criterion .title { font-weight: 700; color: var(--text-title); font-size: 12.5px; margin: 0 0 4px; }
+
+/* Empty state — todo card sem dado nesta release usa esta classe única. */
+.empty-state { color: var(--text-label); font-style: italic; padding: var(--space-16); text-align: center; }
+
+/* Tabelas genéricas */
+table { border-collapse: collapse; width: 100%; }
+th, td { padding: var(--space-6) var(--space-10); border-bottom: 1px solid var(--divider-weak); text-align: left; font-size: 12px; }
+th { font-weight: 700; color: var(--text-label); font-size: 10px; letter-spacing: 0.3px; text-transform: uppercase; }
+.muted { color: var(--text-support); }
+code { font-family: var(--font-mono); font-size: 11px; }
+.bullets { padding-left: var(--space-18); }
+
+/* Trend sparkline (SAI-125) */
 .spark { width: 100%; height: auto; display: block; }
-.spark .threshold { stroke: var(--border); stroke-dasharray: 4 4; stroke-width: 1; }
-table td.pos { color: var(--pass); font-family: var(--mono); }
-table td.neg { color: var(--fail); font-family: var(--mono); }
+.spark .threshold { stroke: var(--divider-weak); stroke-dasharray: 4 4; stroke-width: 1; }
+table td.pos { color: var(--ok-text); font-family: var(--font-mono); }
+table td.neg { color: var(--fail-text); font-family: var(--font-mono); }
+
+/* Score da release / de princípio */
+.score { font-size: 66px; font-weight: 800; letter-spacing: -2px; color: var(--text-title); }
+.score.na { font-size: 23px; color: var(--text-axis); }

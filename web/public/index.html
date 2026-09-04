@@ -4,22 +4,41 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Solidify Dashboard</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='2' y='2' width='9' height='9' rx='2.4' fill='%232563eb'/%3E%3Crect x='13' y='2' width='9' height='9' rx='2.4' fill='%232563eb'/%3E%3Crect x='2' y='13' width='9' height='9' rx='2.4' fill='%232563eb'/%3E%3Crect x='13' y='13' width='9' height='9' rx='2.4' fill='%2316a34a'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="/assets/tokens.css" />
   <link rel="stylesheet" href="/assets/app.css" />
 </head>
 <body>
-  <header class="bar">
-    <h1>Solidify Release Quality</h1>
-    <nav>
-      <a href="#/runs">Runs</a>
-      <a href="#/overview">Overview</a>
-      <a href="#/solid">SOLID</a>
-      <a href="#/quality">Quality</a>
-      <a href="#/ai">AI</a>
-      <a href="#/peer-reviews">Peer reviews</a>
-    </nav>
-  </header>
-  <main id="root"></main>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="2" y="2" width="9" height="9" rx="2.4" fill="#5b8cff"/>
+          <rect x="13" y="2" width="9" height="9" rx="2.4" fill="#2f66e0"/>
+          <rect x="2" y="13" width="9" height="9" rx="2.4" fill="#2f66e0"/>
+          <rect x="13" y="13" width="9" height="9" rx="2.4" fill="#3ecf8e"/>
+        </svg>
+        Solidify
+      </div>
+      <nav id="nav">
+        <a href="#/runs" data-route="runs">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+          Runs
+        </a>
+        <a href="#/peer-reviews" data-route="peer-reviews">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M17 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M10 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM21 20v-1a4 4 0 0 0-3-3.87M16 4.13a4 4 0 0 1 0 7.75" /></svg>
+          Peer reviews
+        </a>
+      </nav>
+      <div id="runNav" class="run-nav"></div>
+      <div class="divider" style="margin-top:auto"></div>
+      <div class="help">Solidify — SOLID quality gate via LLM peer review.</div>
+    </aside>
+    <main>
+      <div class="topbar" id="topbar"><span class="page-title" style="font-size:15px">Solidify Release Quality</span></div>
+      <div id="root" style="margin-top:16px"></div>
+    </main>
+  </div>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
