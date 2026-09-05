@@ -508,6 +508,14 @@ export function hydrateMockup(doc, report, opts = {}) {
     set(865, ((k6.errorRate ?? 0) * 100).toFixed(2) + "%"); hide(867); hide(868);
     hide(846, 1); // Usuários (rps) — sem métrica real distinta (tile único, irmão dos outros 3)
     hide(874, 2); // gráfico latência ao longo do tempo — sem série temporal
+    // Cor do tile segue o veredicto dos thresholds (pass/fail): mockup traz
+    // cor fixa verde que mentiria em caso de falha. p95 + error_rate são os
+    // sinais mais visíveis — usa cor do gateStatus neutro quando não há dado.
+    const k6Cls = k6.passThresholds === false ? "fail" : k6.passThresholds === true ? "ok" : "neutral";
+    const k6Color = STATUS_COLOR[k6Cls];
+    style(838, { color: k6Color.stroke });
+    style(856, { color: k6Color.stroke });
+    style(865, { color: k6Color.stroke });
   } else hide(833, 2);
 
   // Migrations — 1:1 real (path/rollback); sem migration -> oculta.

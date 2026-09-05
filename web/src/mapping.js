@@ -46,12 +46,21 @@ export function mapK6Section(report) {
   const e = emptyOf(a, "carga não configurada nesta release");
   if (e) return e;
   const m = a.metrics || {};
+  // findings agora trazem {threshold, severity, actual_value, expected_value,
+  // unit} — engenheiro que vê "p(95)<500 failed" também vê o p95 medido.
+  const findings = (a.findings || []).map((f) => ({
+    threshold: f.threshold,
+    severity: f.severity,
+    actual: f.actual_value ?? null,
+    expected: f.expected_value ?? null,
+    unit: f.unit ?? null,
+  }));
   return {
     empty: false,
     score: a.score,
     p95Ms: m.p95_ms, p99Ms: m.p99_ms, errorRate: m.error_rate,
     requests: m.requests, throughputRps: m.throughput_rps,
-    passThresholds: m.pass_thresholds, thresholdFailed: (a.findings || []).map((f) => f.threshold),
+    passThresholds: m.pass_thresholds, thresholdFailed: findings,
   };
 }
 

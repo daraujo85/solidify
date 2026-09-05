@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/diegoaraujo/solidify/internal/ai"
+	"github.com/diegoaraujo/solidify/internal/applicability"
 	"github.com/diegoaraujo/solidify/internal/arbiter"
 	"github.com/diegoaraujo/solidify/internal/config"
 	"github.com/diegoaraujo/solidify/internal/errs"
@@ -207,7 +208,23 @@ func runRun(args []string, env Env, logger *slog.Logger) (retErr error) {
 	// Security/k6/Coverage) — cada gate decide applicability sobre o diff
 	// real antes de rodar exec/rede; skip nunca fabrica score.
 	changedPaths := diffPaths(diffFiles)
-	bInput.Analyzers = buildAnalyzers(ctx, cfg, *dir, changedPaths, hasMigrationChanges(changedPaths), hasEnvChanges(changedPaths), logger)
+
+	// Applicability via LLM (opt-in via applicability.llm.enabled):
+	// quando habilitado, enriquece as 8 decisions com segunda opinião
+	// do mesmo provider usado pelos peers. Default off ⇒ comportamento
+	// idêntico ao atual (heurística pura).
+	var appLLMDecider *applicability.LLMDecider
+	if cfg.Applicability.LLM.Enabled && cfg.Applicability.LLM.Model != "" {
+		appLLMDecider = applicability.NewLLMDecider(provider, cfg.Applicability.LLM.Model)
+		switch cfg.Applicability.LLM.Mode {
+		case "enforce":
+			appLLMDecider.Mode = applicability.ModeEnforce
+		default:
+			appLLMDecider.Mode = applicability.ModeAdvisory
+		}
+	}
+
+	bInput.Analyzers = buildAnalyzers(ctx, cfg, *dir, changedPaths, hasMigrationChanges(changedPaths), hasEnvChanges(changedPaths), logger, appLLMDecider)
 
 	// Wiring de git.commits[]/git.changed_files[]/migrations[] — antes
 	// disso nenhum dos 3 arrays era populado em produção (só na fixture

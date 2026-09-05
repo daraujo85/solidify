@@ -51,6 +51,13 @@ type Decision struct {
 	Gate    Gate
 	Verdict Verdict
 	Reason  string
+	// Source identifica quem produziu a decisão (heurística vs LLM).
+	// Vazio = produzido pelo caminho puramente determinístico (Decide()).
+	Source Source `json:"source,omitempty"`
+	// LLMAssessed é true quando o LLM participou da decisão
+	// (mesmo que no modo advisory, onde só enriquece Reason).
+	// Em fallback (LLM falhou), fica false.
+	LLMAssessed bool `json:"llm_assessed,omitempty"`
 }
 
 // Profile é o resumo do release sob análise.

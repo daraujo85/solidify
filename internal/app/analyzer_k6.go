@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/diegoaraujo/solidify/internal/config"
@@ -42,8 +44,25 @@ func runK6Analyzer(ctx context.Context, cfg config.Config, dir string, logger *s
 		return skippedAnalyzer("k6", "CONDITIONAL", "skipped:not_configured", "analyzers.load.mode = disabled")
 	}
 
+	// ModeContainer precisa de `docker` no PATH; sem isso o erro viria tarde
+	// como "summary não gerado" — melhor pular cedo com motivo claro.
+	if k6cfg.Mode == k6.ModeContainer && !toolAvailable("docker") {
+		return skippedAnalyzer("k6", "APPLICABLE", "skipped:tool_unavailable", "docker não encontrado no PATH (mode=container)")
+	}
+
+	// Quando rodando em container, target 127.0.0.1/localhost aponta pro
+	// próprio container; reescreve pra host.docker.internal (mapeado via
+	// --add-host em RunK6). Só aplica a hosts loopback — host externo fica
+	// intacto. Mantém porta.
+	runTarget := target
+	if k6cfg.Mode == k6.ModeContainer {
+		if t, ok := rewriteLoopbackHost(target); ok {
+			runTarget = t
+		}
+	}
+
 	eps := k6.PrioritizeEndpoints(cfg.Targets.API, nil, 1.0, 1.0)
-	script, _, err := k6.ResolveScript(target, ld.ScriptPath, eps, k6cfg)
+	script, _, err := k6.ResolveScript(runTarget, ld.ScriptPath, eps, k6cfg)
 	if err != nil {
 		return failedAnalyzer("k6", err)
 	}
@@ -58,7 +77,7 @@ func runK6Analyzer(ctx context.Context, cfg config.Config, dir string, logger *s
 
 	cctx, cancel := context.WithTimeout(ctx, k6cfg.Duration+2*time.Minute)
 	defer cancel()
-	result, err := k6.RunK6(cctx, k6.RunConfig{Mode: k6cfg.Mode, Bin: bin, Target: target, Script: script})
+	result, err := k6.RunK6(cctx, k6.RunConfig{Mode: k6cfg.Mode, Bin: bin, Target: runTarget, Script: script})
 	if err != nil {
 		logger.Warn("k6: execução falhou", "err", err)
 		return failedAnalyzer("k6", err)
@@ -77,8 +96,48 @@ func runK6Analyzer(ctx context.Context, cfg config.Config, dir string, logger *s
 		"error_rate": result.Summary.ErrorRate, "requests": result.Summary.Requests,
 		"throughput_rps": result.Summary.Throughput, "pass_thresholds": pass,
 	}
+	// Findings agora carregam valor medido vs esperado — antes o dash só
+	// mostrava "p(95)<500 failed" sem dizer qual p95 rolou.
 	findings := make([]map[string]any, 0, len(result.Summary.ThresholdFailed))
+	if result.Summary.P95 > k6cfg.ThresholdP95 {
+		findings = append(findings, map[string]any{
+			"threshold":      "p(95)<" + k6cfg.ThresholdP95.String(),
+			"severity":       "medium",
+			"actual_value":   result.Summary.P95.Milliseconds(),
+			"expected_value": k6cfg.ThresholdP95.Milliseconds(),
+			"unit":           "ms",
+		})
+	}
+	if result.Summary.P99 > k6cfg.ThresholdP99 {
+		findings = append(findings, map[string]any{
+			"threshold":      "p(99)<" + k6cfg.ThresholdP99.String(),
+			"severity":       "medium",
+			"actual_value":   result.Summary.P99.Milliseconds(),
+			"expected_value": k6cfg.ThresholdP99.Milliseconds(),
+			"unit":           "ms",
+		})
+	}
+	if result.Summary.ErrorRate > k6cfg.MaxErrorRate {
+		findings = append(findings, map[string]any{
+			"threshold":      fmt.Sprintf("http_req_failed:rate<%f", k6cfg.MaxErrorRate),
+			"severity":       "medium",
+			"actual_value":   result.Summary.ErrorRate,
+			"expected_value": k6cfg.MaxErrorRate,
+			"unit":           "rate",
+		})
+	}
 	for _, t := range result.Summary.ThresholdFailed {
+		// não duplicar thresholds já detalhados acima (k6 reporta em duas formas)
+		alreadyCovered := false
+		for _, f := range findings {
+			if f["threshold"] == t {
+				alreadyCovered = true
+				break
+			}
+		}
+		if alreadyCovered {
+			continue
+		}
 		findings = append(findings, map[string]any{"threshold": t, "severity": "medium"})
 	}
 
@@ -86,4 +145,47 @@ func runK6Analyzer(ctx context.Context, cfg config.Config, dir string, logger *s
 		ID: "k6", Applicability: "APPLICABLE", ExecutionStatus: statusPtr("completed"),
 		Score: &score, Findings: findings, Metrics: metrics,
 	}
+}
+
+// rewriteLoopbackHost troca 127.0.0.1 / localhost por host.docker.internal
+// (resolve pro gateway do docker host com --add-host). Devolve ok=false se
+// o host não é loopback — não toca em host externo.
+func rewriteLoopbackHost(target string) (string, bool) {
+	t := strings.TrimSpace(target)
+	if t == "" {
+		return target, false
+	}
+	// encontra scheme://host:port ou scheme://host
+	scheme := ""
+	rest := t
+	if i := strings.Index(t, "://"); i >= 0 {
+		scheme = t[:i+3]
+		rest = t[i+3:]
+	}
+	host := rest
+	port := ""
+	if i := strings.Index(rest, "/"); i >= 0 {
+		host = rest[:i]
+		if scheme == "" {
+			rest = rest[i:] // preserva path/query pra host sem scheme
+		}
+	}
+	if i := strings.LastIndex(host, ":"); i >= 0 {
+		// evita cortar IPv6; aqui host é simples (loopback só).
+		port = host[i:]
+		host = host[:i]
+	}
+	switch strings.ToLower(host) {
+	case "127.0.0.1", "localhost", "0.0.0.0":
+		host = "host.docker.internal"
+	default:
+		return target, false
+	}
+	out := scheme + host + port
+	if scheme == "" && strings.Contains(t, "/") {
+		// preserva path/query quando target sem scheme veio com path
+		slash := strings.Index(t, "/")
+		out += t[slash:]
+	}
+	return out, true
 }

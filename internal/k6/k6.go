@@ -152,6 +152,13 @@ type RunConfig struct {
 	Target string
 	Script []byte
 	Out    string // path do summary JSON
+	// ContainerImage override da imagem docker (default grafana/k6).
+	// ponytail: YAGNI por enquanto — documentado pra upgrade quando precisarmos
+	// de tag pinada (ex.: grafana/k6:0.49.0) ou registry privado.
+	ContainerImage string
+	// ContainerExtraArgs flags extras pro `docker run` (ex.: --network host).
+	// Inseridas antes da imagem, então valem pra qualquer setup docker.
+	ContainerExtraArgs []string
 }
 
 // k6Summary subset do JSON output do k6 --summary-export.
@@ -299,10 +306,26 @@ func RunK6(ctx context.Context, rc RunConfig) (*RunResult, error) {
 		cmd = exec.CommandContext(ctx, bin, "run", "--summary-export="+outPath, scriptPath)
 	case ModeContainer:
 		dir := "/scripts"
-		cmd = exec.CommandContext(ctx, "docker", "run", "--rm", "-i",
+		image := rc.ContainerImage
+		if image == "" {
+			image = "grafana/k6"
+		}
+		// --add-host=host.docker.internal:host-gateway (Docker 20.10+) deixa o
+		// container alcançar o host em Linux/macOS/Windows sem --network host.
+		// Sem isso, `http://127.0.0.1:3000` falha dentro do container porque
+		// o localhost dele é o próprio container, não o host da app.
+		args := []string{"run", "--rm", "--add-host=host.docker.internal:host-gateway"}
+		args = append(args, rc.ContainerExtraArgs...)
+		args = append(args,
 			"-v", scriptPath+":"+dir+"/script.js",
 			"-v", outPath+":"+dir+"/summary.json",
-			"grafana/k6", "run", "--summary-export="+dir+"/summary.json", dir+"/script.js")
+			image, "run", "--summary-export="+dir+"/summary.json", dir+"/script.js",
+		)
+		cmd = exec.CommandContext(ctx, "docker", args...)
+		// k6 não lê stdin; --rm + execução curta não costumam hangar, mas
+		// drenar evita o foot-gun de `-i` segurar EOF em algumas combinações
+		// de terminal/tmux. Sem custo quando stdin já vem vazio.
+		cmd.Stdin = strings.NewReader("")
 	default:
 		return nil, fmt.Errorf("k6: mode inválido: %s", rc.Mode)
 	}

@@ -9,7 +9,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -18,6 +17,7 @@ import (
 	"time"
 
 	"github.com/diegoaraujo/solidify/internal/ai"
+	"github.com/diegoaraujo/solidify/internal/jsonx"
 )
 
 // ExecutorResult output.
@@ -152,7 +152,7 @@ func (e *Executor) Execute(ctx context.Context, opts ExecutorOptions) (*Executor
 		result.Attempts = append(result.Attempts, att)
 		result.ResolvedModel = res.Model
 
-		parsed, ok := parseJSONContent(res.Content)
+		parsed, ok := jsonx.ParseContent(res.Content)
 		if !ok {
 			// Repair: 1 tentativa (SAI-116). Falha → ScoreStatus=unavailable,
 			// sem fallback silencioso.
@@ -181,7 +181,7 @@ func (e *Executor) Execute(ctx context.Context, opts ExecutorOptions) (*Executor
 			if result.RepairCount == 0 {
 				repaired, rerr := e.repairOutput(ctx, opts, res.Content, verrs)
 				if rerr == nil {
-					if reparsed, ok := parseJSONContent(repaired.Content); ok {
+					if reparsed, ok := jsonx.ParseContent(repaired.Content); ok {
 						if verrs2 := validateCanonical(reparsed); len(verrs2) == 0 {
 							parsed = reparsed
 							res = repaired
@@ -380,91 +380,19 @@ func (e *Executor) repairOutput(ctx context.Context, opts ExecutorOptions, broke
 	return res, nil
 }
 
-// parseJSONContent tenta parsear (com strip fence).
-func parseJSONContent(s string) (map[string]any, bool) {
-	s = ai.StripCodeFences(s)
-	var v map[string]any
-	if err := json.Unmarshal([]byte(s), &v); err == nil && len(v) > 0 {
-		return v, true
-	}
-	// SAI-129D: alguns providers (mimo/MiniMax-M2.1, claude-coder) devolvem
-	// `<think>...</think>` antes do JSON. json.Unmarshal é estrito e não
-	// extrai do ruído. Acha todos os objetos balanceados (podem ser vários
-	// — fragmentos vazios em prosa antes do JSON canônico) e tenta cada
-	// um; o primeiro não-vazio que parseia é o retorno. Sem isso o score
-	// cai pra unavailable mesmo com peer gerando resposta válida (achado
-	// e2e violator; re-achado e2e em commit real de projeto).
-	for _, c := range extractJSONCandidates(s) {
-		if err := json.Unmarshal([]byte(s[c[0]:c[1]+1]), &v); err == nil && len(v) > 0 {
-			return v, true
-		}
-	}
-	return nil, false
-}
+// parseJSONContent kept as a thin alias for backwards compatibility —
+// helpers foram movidos pra internal/jsonx (reuso entre peer.Executor
+// e applicability.LLM).
+func parseJSONContent(s string) (map[string]any, bool) { return jsonx.ParseContent(s) }
 
-// extractJSONCandidates retorna cada par balanceado {…} em s, na
-// ordem em que abrem. Strings literais escapadas não confundem o
-// balanceamento. A maior das candidatas ganha preferência em
-// parseJSONContent porque costuma ser a JSON canônico e descarta
-// fragmentos vazios que aparecem como prosa (`{}`, `{not JSON}`).
-func extractJSONCandidates(s string) [][2]int {
-	var out [][2]int
-	for i := 0; i < len(s); i++ {
-		if s[i] != '{' {
-			continue
-		}
-		end := matchBrace(s, i)
-		if end < 0 {
-			continue
-		}
-		out = append(out, [2]int{i, end})
-		i = end
-	}
-	return out
-}
+// extractJSONCandidates e matchBrace mantidos como aliases para
+// compatibilidade de testes existentes no pacote peer.
+func extractJSONCandidates(s string) [][2]int { return jsonx.Candidates(s) }
 
-func matchBrace(s string, start int) int {
-	depth, inStr, escape := 0, false, false
-	for i := start; i < len(s); i++ {
-		c := s[i]
-		if escape {
-			escape = false
-			continue
-		}
-		if c == '\\' && inStr {
-			escape = true
-			continue
-		}
-		if c == '"' {
-			inStr = !inStr
-			continue
-		}
-		if inStr {
-			continue
-		}
-		switch c {
-		case '{':
-			depth++
-		case '}':
-			depth--
-			if depth == 0 {
-				return i
-			}
-		}
-	}
-	return -1
-}
+func matchBrace(s string, start int) int { return jsonx.MatchBrace(s, start) }
 
-// extractJSONBounds kept for backwards compatibility: pega o 1º objeto
-// balanceado (mesmo comportamento histórico). Para extração robusta
-// com múltiplos candidatos, prefira extractJSONCandidates.
-func extractJSONBounds(s string) (int, int) {
-	cands := extractJSONCandidates(s)
-	if len(cands) == 0 {
-		return -1, -1
-	}
-	return cands[0][0], cands[0][1]
-}
+// extractJSONBounds kept for backwards compatibility.
+func extractJSONBounds(s string) (int, int) { return jsonx.FirstBounds(s) }
 
 // ComputeOutputHash SHA256 do conteúdo.
 func ComputeOutputHash(content string) string {

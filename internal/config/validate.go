@@ -29,6 +29,7 @@ func (c Config) Validate() error {
 		c.validateAnalyzers,
 		c.validateAI,
 		c.validateReport,
+		c.validateApplicability,
 	}
 	for _, check := range checks {
 		if err := check(); err != nil {
@@ -425,6 +426,27 @@ func (c Config) validateReport() error {
 		if err := validateRelativeDir("report.logo_path", c.Report.LogoPath); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// validateApplicability valida a config do caminho LLM-enriquecido.
+func (c Config) validateApplicability() error {
+	llm := c.Applicability.LLM
+	if !llm.Enabled {
+		return nil
+	}
+	if strings.TrimSpace(llm.Model) == "" {
+		return invalid("applicability.llm.model",
+			"applicability.llm.enabled=true exige model preferido").
+			WithHint("preencha applicability.llm.model ou desabilite a feature")
+	}
+	switch llm.Mode {
+	case "", "advisory", "enforce":
+	default:
+		return invalid("applicability.llm.mode",
+			"modo inválido: "+quote(llm.Mode)).
+			WithHint("use advisory ou enforce")
 	}
 	return nil
 }

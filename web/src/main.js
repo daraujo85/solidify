@@ -100,37 +100,108 @@ function fmtDateTime(iso) {
   return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
+// Filtros + sort pra lista de Runs. Sem dependência nova — só combinamos
+// filtros por column-match e sort por comparator. Estado é local ao
+// viewRuns (sem URL/state compartilhado). ponytail: paginação server-side
+// quando o número de runs estourar a casa dos milhares (hoje tudo client-side).
 function viewRuns(runs) {
   const wrap = el("div", { class: "card" });
   wrap.appendChild(el("div", { class: "card-header" }, "Runs"));
   const body = el("div", { class: "card-body" });
-  const t = el("table");
-  t.appendChild(el("thead", null,
-    el("tr", null,
-      el("th", null, "Run ID"),
-      el("th", null, "Projeto"),
-      el("th", null, "Profile"),
-      el("th", null, "Escopo"),
-      el("th", null, "Gate"),
-      el("th", null, "Score"),
-      el("th", null, "Risk"),
-      el("th", null, "Finalizado em"))));
-  const tbody = el("tbody");
-  for (const r of runs) {
-    tbody.appendChild(el("tr", null,
-      el("td", null,
-        el("a", { href: `#/run/${encodeURIComponent(r.run_id)}` }, r.run_id)),
-      el("td", null, r.project_name || "—"),
-      el("td", null, r.profile),
-      el("td", { class: "muted" }, r.base_ref || r.head_ref ? `${r.base_ref || "—"} → ${r.head_ref || "—"}` : "—"),
-      el("td", null, badge(r.gate_status || "INCOMPLETE")),
-      el("td", null, String(Math.round(r.quality || 0))),
-      el("td", null, el("span", { class: "pill " + severityClass(r.risk_level) }, r.risk_level || "LOW")),
-      el("td", null, fmtDateTime(r.finalized_at))));
+
+  const COLS = [
+    { key: "run_id",       label: "Run ID",        sortVal: (r) => r.run_id || "" },
+    { key: "project_name", label: "Projeto",       sortVal: (r) => r.project_name || "" },
+    { key: "profile",      label: "Perfil",        sortVal: (r) => r.profile || "" },
+    { key: "scope",        label: "Escopo",        sortVal: (r) => `${r.base_ref || ""}→${r.head_ref || ""}` },
+    { key: "gate_status",  label: "Gate",          sortVal: (r) => r.gate_status || "" },
+    { key: "quality",      label: "Score",         sortVal: (r) => r.quality ?? -1 },
+    { key: "risk_level",   label: "Risco",         sortVal: (r) => r.risk_level || "" },
+    { key: "finalized_at", label: "Finalizado em", sortVal: (r) => r.finalized_at || "" },
+  ];
+  const sortKey = { col: "finalized_at", dir: -1 }; // -1 desc, +1 asc
+
+  // Filtros: <select> por coluna com "(todos)" + opção "—". Não filtramos
+  // Run ID / Score / Finalizado (texto livre não cabe num dropdown);
+  // ordenação por clique cobre essas.
+  const FILTERABLE = ["project_name", "profile", "gate_status", "risk_level"];
+  const filters = Object.fromEntries(FILTERABLE.map((k) => [k, ""]));
+  const toolbar = el("div", { class: "filter-bar" });
+  for (const k of FILTERABLE) {
+    const col = COLS.find((c) => c.key === k);
+    const values = Array.from(new Set(runs.map((r) => {
+      const v = k === "gate_status" ? (r.gate_status || "INCOMPLETE")
+        : k === "risk_level"   ? (r.risk_level  || "LOW")
+        : r[k] || "—";
+      return v;
+    }))).sort();
+    const sel = el("select", { class: "filter-select", "aria-label": `Filtrar por ${col.label}`, title: col.label },
+      el("option", { value: "" }, `${col.label}: todos`),
+      ...values.map((v) => el("option", { value: v }, `${col.label}: ${v}`)),
+    );
+    sel.addEventListener("change", () => { filters[k] = sel.value; paint(); });
+    toolbar.appendChild(sel);
   }
+  body.appendChild(toolbar);
+
+  const t = el("table");
+  const thead = el("thead");
+  const tbody = el("tbody");
+  t.appendChild(thead);
   t.appendChild(tbody);
   body.appendChild(t);
   wrap.appendChild(body);
+
+  const paint = () => {
+    const filtered = runs.filter((r) => FILTERABLE.every((k) => {
+      const want = filters[k];
+      if (!want) return true;
+      const got = k === "gate_status" ? (r.gate_status || "INCOMPLETE")
+        : k === "risk_level"   ? (r.risk_level  || "LOW")
+        : (r[k] || "—");
+      return got === want;
+    }));
+    const col = COLS.find((c) => c.key === sortKey.col);
+    const sorted = [...filtered].sort((a, b) => {
+      const av = col.sortVal(a), bv = col.sortVal(b);
+      if (av < bv) return -1 * sortKey.dir;
+      if (av > bv) return  1 * sortKey.dir;
+      return 0;
+    });
+
+    while (thead.firstChild) thead.removeChild(thead.firstChild);
+    while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+    thead.appendChild(el("tr", null, ...COLS.map((c) => {
+      const arrow = sortKey.col === c.key ? (sortKey.dir > 0 ? " ▲" : " ▼") : "";
+      return el("th", {
+        style: "cursor:pointer; user-select:none;",
+        title: "Clique pra ordenar",
+        onclick: () => {
+          if (sortKey.col === c.key) sortKey.dir = -sortKey.dir;
+          else { sortKey.col = c.key; sortKey.dir = c.key === "finalized_at" ? -1 : +1; }
+          paint();
+        },
+      }, c.label + arrow);
+    })));
+
+    for (const r of sorted) {
+      tbody.appendChild(el("tr", null,
+        el("td", null,
+          el("a", { href: `#/run/${encodeURIComponent(r.run_id)}` }, r.run_id)),
+        el("td", null, r.project_name || "—"),
+        el("td", null, r.profile),
+        el("td", { class: "muted" }, r.base_ref || r.head_ref ? `${r.base_ref || "—"} → ${r.head_ref || "—"}` : "—"),
+        el("td", null, badge(r.gate_status || "INCOMPLETE")),
+        el("td", null, String(Math.round(r.quality || 0))),
+        el("td", null, el("span", { class: "pill " + severityClass(r.risk_level) }, r.risk_level || "LOW")),
+        el("td", null, fmtDateTime(r.finalized_at))));
+    }
+    if (!sorted.length) {
+      tbody.appendChild(el("tr", null,
+        el("td", { colspan: String(COLS.length), class: "muted" }, "Nenhum run com esses filtros.")));
+    }
+  };
+  paint();
   return wrap;
 }
 

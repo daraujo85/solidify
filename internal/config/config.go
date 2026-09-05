@@ -13,20 +13,21 @@ const SchemaVersion = "1.0.0"
 
 // Config é a config efetiva do Solidify.
 type Config struct {
-	Schema        string    `json:"$schema,omitempty"`
-	SchemaVersion string    `json:"schema_version"`
-	Project       Project   `json:"project"`
-	Analysis      Analysis  `json:"analysis"`
-	Profiles      Profiles  `json:"profiles"`
-	Scoring       Scoring   `json:"scoring"`
-	Git           Git       `json:"git"`
-	Detectors     Detectors `json:"detectors"`
-	Runtime       Runtime   `json:"runtime"`
-	Targets       Targets   `json:"targets"`
-	Analyzers     Analyzers `json:"analyzers"`
-	AI            AI        `json:"ai"`
-	Report        Report    `json:"report"`
-	Privacy       Privacy   `json:"privacy"`
+	Schema        string       `json:"$schema,omitempty"`
+	SchemaVersion string       `json:"schema_version"`
+	Project       Project      `json:"project"`
+	Analysis      Analysis     `json:"analysis"`
+	Profiles      Profiles     `json:"profiles"`
+	Scoring       Scoring      `json:"scoring"`
+	Git           Git          `json:"git"`
+	Detectors     Detectors    `json:"detectors"`
+	Runtime       Runtime      `json:"runtime"`
+	Targets       Targets      `json:"targets"`
+	Analyzers     Analyzers    `json:"analyzers"`
+	AI            AI           `json:"ai"`
+	Applicability Applicability `json:"applicability"`
+	Report        Report       `json:"report"`
+	Privacy       Privacy      `json:"privacy"`
 }
 
 // Project descreve o repositório analisado.
@@ -203,7 +204,7 @@ func (c LighthouseCategories) Sum() int {
 type LoadAnalyzer struct {
 	Enabled                   bool    `json:"enabled"`
 	DefaultMode               string  `json:"default_mode"` // smoke|load|stress|soak
-	Mode                      string  `json:"mode"`          // binary|container|disabled
+	Mode                      string  `json:"mode"`         // binary|container|disabled
 	RequireThresholdsForScore bool    `json:"require_thresholds_for_score"`
 	ScriptPath                string  `json:"script_path,omitempty"` // vazio = smoke script auto-gerado
 	VUs                       int     `json:"vus"`
@@ -326,6 +327,33 @@ type Privacy struct {
 	PersistModelRequests  bool `json:"persist_model_requests"`
 	PersistModelResponses bool `json:"persist_model_responses"`
 	RedactSecrets         bool `json:"redact_secrets"`
+}
+
+// Applicability configura a avaliação de applicability por gate.
+//
+// LLM, quando Enabled=true, monta um LLMDecider (ver internal/applicability)
+// que serializa o Profile e chama o provider configurado em
+// AI.ExternalProvider / Selection. Em qualquer falha (timeout, parse,
+// schema inválido) cai pra heurística pura (Decide()) e marca
+// Source=llm-fallback — nunca quebra o run.
+//
+// Mode:
+//   - advisory (default): LLM só enriquece Reason; Verdict = heurística.
+//   - enforce:           LLM pode override Verdict (auditado em Source).
+//
+// Custo/latência: ~1–3s por run quando Enabled. Mitigação:
+// cache LRU (64 perfis) em internal/applicability.DecisionCache.
+// Default Enabled=false ⇒ comportamento idêntico ao da heurística
+// pura, sem chamadas extras a LLM.
+type Applicability struct {
+	LLM ApplicabilityLLM `json:"llm"`
+}
+
+// ApplicabilityLLM configura o caminho LLM-enriquecido de applicability.
+type ApplicabilityLLM struct {
+	Enabled bool   `json:"enabled"`
+	Model   string `json:"model,omitempty"`
+	Mode    string `json:"mode,omitempty"` // advisory|enforce; vazio = advisory
 }
 
 func ptr(b bool) *bool { return &b }
@@ -455,6 +483,9 @@ func Default() Config {
 			},
 		},
 		Report: Report{Language: "pt-BR", PDF: PDF{Paper: "A4", BrowserMode: "auto"}},
+		Applicability: Applicability{
+			LLM: ApplicabilityLLM{Enabled: false, Mode: "advisory"},
+		},
 		Privacy: Privacy{
 			PersistFullDiff:       true,
 			PersistModelRequests:  false,

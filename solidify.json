@@ -142,7 +142,7 @@
     "load": {
       "enabled": true,
       "default_mode": "smoke",
-      "mode": "binary",
+      "mode": "container",
       "require_thresholds_for_score": true,
       "vus": 10,
       "duration_seconds": 30,

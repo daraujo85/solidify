@@ -73,9 +73,12 @@ func buildApplicabilityProfile(cfg config.Config, changedPaths []string, hasMigr
 // buildAnalyzers roda (ou pula, com motivo explícito) os 5 analyzers
 // determinísticos. Cada um vira exatamente 1 report.Analyzer — skip
 // nunca fabrica score/finding (contrato: estado vazio explícito).
-func buildAnalyzers(ctx context.Context, cfg config.Config, dir string, changedPaths []string, hasMigrations, hasEnvChanges bool, logger *slog.Logger) []report.Analyzer {
+//
+// llmDecider é opcional: se não-nil e habilitado, enriquece applicability
+// com LLM (fallback automático para heurística em erro/timeout).
+func buildAnalyzers(ctx context.Context, cfg config.Config, dir string, changedPaths []string, hasMigrations, hasEnvChanges bool, logger *slog.Logger, llmDecider *applicability.LLMDecider) []report.Analyzer {
 	profile := buildApplicabilityProfile(cfg, changedPaths, hasMigrations, hasEnvChanges)
-	decisions := applicability.Decide(profile)
+	decisions := decideApplicability(ctx, profile, llmDecider)
 	byGate := make(map[applicability.Gate]applicability.Decision, len(decisions))
 	for _, d := range decisions {
 		byGate[d.Gate] = d
@@ -88,6 +91,15 @@ func buildAnalyzers(ctx context.Context, cfg config.Config, dir string, changedP
 	out = append(out, runOrSkip(ctx, byGate[applicability.GateK6], "k6", cfg, dir, logger, runK6Analyzer))
 	out = append(out, runCoverageAnalyzer(cfg, dir)) // coverage não depende de applicability — só de arquivo existir
 	return out
+}
+
+// decideApplicability decide via LLM quando o decider está configurado;
+// caso contrário cai direto pra heurística pura (compat).
+func decideApplicability(ctx context.Context, profile applicability.Profile, decider *applicability.LLMDecider) []applicability.Decision {
+	if decider == nil || decider.Provider == nil || decider.Model == "" {
+		return applicability.Decide(profile)
+	}
+	return decider.DecideWithContext(ctx, profile)
 }
 
 // analyzerFunc é o formato comum de cada runner concreto.
