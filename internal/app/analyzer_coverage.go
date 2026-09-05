@@ -16,7 +16,7 @@ func runCoverageAnalyzer(cfg config.Config, dir string) report.Analyzer {
 	cv := cfg.Analyzers.Coverage
 	if !cv.Enabled || cv.ReportPath == "" {
 		return skippedAnalyzer("coverage", "CONDITIONAL", "skipped:not_configured",
-			"analyzers.coverage.report_path não configurado")
+			"analyzers.coverage.report_path não configurado", "")
 	}
 	path := cv.ReportPath
 	if !filepath.IsAbs(path) {
@@ -24,7 +24,7 @@ func runCoverageAnalyzer(cfg config.Config, dir string) report.Analyzer {
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		return skippedAnalyzer("coverage", "APPLICABLE", "skipped:report_missing", err.Error())
+		return skippedAnalyzer("coverage", "APPLICABLE", "skipped:report_missing", err.Error(), "")
 	}
 	defer f.Close()
 

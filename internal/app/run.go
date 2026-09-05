@@ -207,6 +207,22 @@ func runRun(args []string, env Env, logger *slog.Logger) (retErr error) {
 	// SAI-138: wiring dos 5 analyzers determinísticos (Sonar/Lighthouse/
 	// Security/k6/Coverage) — cada gate decide applicability sobre o diff
 	// real antes de rodar exec/rede; skip nunca fabrica score.
+	// Provider 9Router: instanciado cedo para que applicability LLM,
+	// buildAnalyzers e todos os peers usem o mesmo client.
+	host := cfg.AI.ExternalProvider.BaseURLDocker
+	if ai.DetectNetworkContext() == ai.NetworkHost {
+		host = cfg.AI.ExternalProvider.BaseURLHost
+	}
+	keyEnv := cfg.AI.ExternalProvider.APIKeyEnv
+	if keyEnv == "" {
+		keyEnv = ai.NineRouterTokenEnv
+	}
+	timeout := time.Duration(cfg.AI.ExternalProvider.RequestTimeoutSeconds) * time.Second
+	provider := ai.NewOpenAIProvider(host, os.Getenv(keyEnv)).WithProviderName("9router")
+	if timeout > 0 {
+		provider = provider.WithHTTPClient(&http.Client{Timeout: timeout})
+	}
+
 	changedPaths := diffPaths(diffFiles)
 
 	// Applicability via LLM (opt-in via applicability.llm.enabled):
@@ -244,6 +260,13 @@ func runRun(args []string, env Env, logger *slog.Logger) (retErr error) {
 	}
 	bInput.EnvChanges = buildEnvChanges(diffFiles, cfg.Detectors)
 
+	// SAI-138 Fase A4: ReleaseNotes base (groups + breaking_changes) é
+	// determinístico a partir de commits já classificados (sem LLM).
+	// ExecutiveSummary LLM é populado/sobrescrito depois do gate (em
+	// "narrative analyzer" abaixo) — essa versão fica como fallback
+	// quando o LLM está desligado.
+	bInput.ReleaseNotes = buildReleaseNotes(bInput.Git.Commits, bInput.Migrations)
+
 	// SAI-129B: heurística determinística de applicability roda 1x sobre
 	// o diff bruto, ANTES de qualquer peer — mesmo sinal pros dois (mesmo
 	// diff). Se os 5 princípios vierem CLEARLY_NOT_APPLICABLE (golden case
@@ -252,20 +275,6 @@ func runRun(args []string, env Env, logger *slog.Logger) (retErr error) {
 	heuristicSkip := peer.AllNotApplicable(hints)
 	heuristicHintsText := peer.FormatHeuristicHints(hints)
 
-	// Provider 9Router: mesma resolução host/token do doctor (SAI-113).
-	host := cfg.AI.ExternalProvider.BaseURLDocker
-	if ai.DetectNetworkContext() == ai.NetworkHost {
-		host = cfg.AI.ExternalProvider.BaseURLHost
-	}
-	keyEnv := cfg.AI.ExternalProvider.APIKeyEnv
-	if keyEnv == "" {
-		keyEnv = ai.NineRouterTokenEnv
-	}
-	timeout := time.Duration(cfg.AI.ExternalProvider.RequestTimeoutSeconds) * time.Second
-	provider := ai.NewOpenAIProvider(host, os.Getenv(keyEnv)).WithProviderName("9router")
-	if timeout > 0 {
-		provider = provider.WithHTTPClient(&http.Client{Timeout: timeout})
-	}
 
 	// --- peer_a ---
 	var peerARes *peer.ExecutorResult
@@ -478,6 +487,27 @@ func runRun(args []string, env Env, logger *slog.Logger) (retErr error) {
 			{ID: "G1", Status: gateRes.Subgates.Quality.Status, Blocking: gateRes.Subgates.Quality.Blocking},
 			{ID: "G2", Status: gateRes.Subgates.Independence.Status, Blocking: gateRes.Subgates.Independence.Blocking},
 		},
+	}
+
+	// SAI-138 Fase A4: narrativa LLM opcional (executive_summary + score
+	// trend + SOLID insights) — só roda se cfg.AI.Selection.Narrative
+	// tiver Preferred não-vazio (mesmo firstPreferred() do peer; sem
+	// selector real). Em falha ou LLM desligado, campos ficam vazios e
+	// o dashboard (§16 + score trend) já esconde as seções sem fabricar
+	// "—". Determina DEPOIS de SOLID/Risk/Recommendations/Scores — toda
+	// a matéria-prima do prompt já está em bInput.
+	if narrModel, _ := firstPreferred(cfg.AI.Selection.Narrative, false); narrModel != "" {
+		narrRes := (&NarrativeAnalyzer{
+			Provider: provider,
+			Model:    narrModel,
+			Timeout:  timeout,
+			Logger:   logger,
+		}).Generate(ctx, &bInput)
+		if bInput.ReleaseNotes.ExecutiveSummary == "" && narrRes.ExecutiveSummary != "" {
+			bInput.ReleaseNotes.ExecutiveSummary = narrRes.ExecutiveSummary
+		}
+		bInput.ReleaseNotes.ScoreTrendNarrative = narrRes.ScoreTrendNarrative
+		bInput.ReleaseNotes.SolidInsights = narrRes.SolidInsights
 	}
 
 	rep, berr := report.NewBuilder(bInput).Build()

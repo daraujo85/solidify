@@ -265,13 +265,25 @@ export function mapAIReviewers(report) {
 }
 
 // §16 Resumo da Release.
+// Fontes reais: release_notes.executive_summary (LLM ou determinístico),
+// .breaking_changes (de commits com Conventional.Breaking),
+// .score_trend_narrative (LLM opcional, cfg.AI.Selection.Narrative),
+// .solid_insights (idem). Sem nenhum campo populado -> empty; nunca
+// fabrica placeholder.
 export function mapSummary(report) {
   const rn = report.release_notes || {};
-  if (!rn.executive_summary && !(rn.breaking_changes || []).length) {
+  const hasSummary = !!rn.executive_summary;
+  const hasBreaking = !!(rn.breaking_changes || []).length;
+  const hasTrend = !!rn.score_trend_narrative;
+  const hasSolid = !!rn.solid_insights;
+  if (!hasSummary && !hasBreaking && !hasTrend && !hasSolid) {
     return { empty: true, reason: "resumo executivo não gerado nesta release" };
   }
   return {
-    empty: false, summary: rn.executive_summary || "",
+    empty: false,
+    summary: rn.executive_summary || "",
+    scoreTrendNarrative: rn.score_trend_narrative || "",
+    solidInsights: rn.solid_insights || "",
     breakingChanges: (rn.breaking_changes || []).map((b) => ({ title: b.title, description: b.description || "" })),
   };
 }

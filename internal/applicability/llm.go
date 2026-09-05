@@ -348,19 +348,22 @@ func merge(heuristic []Decision, llmDecisions []llmDecision, mode Mode) []Decisi
 			continue
 		}
 		verdict := h.Verdict
-		source := SourceLLM
 		if mode == ModeAdvisory || !validVerdict(llm.Verdict) {
 			verdict = h.Verdict
-			source = SourceLLM
 		} else {
-			// enforce: LLM pode override.
 			v := normalizeVerdict(llm.Verdict)
 			if v != "" {
 				verdict = v
 			}
 		}
 		reason := mergeReason(h.Reason, llm.Reason, llm.Evidence, mode)
-		out = append(out, Decision{Gate: h.Gate, Verdict: verdict, Reason: reason, Source: source})
+		out = append(out, Decision{
+			Gate:        h.Gate,
+			Verdict:     verdict,
+			Reason:      reason,
+			Source:      SourceLLM,
+			LLMAssessed: true,
+		})
 	}
 	return out
 }

@@ -252,6 +252,38 @@ func TestDecisionCache_EvictsOldest(t *testing.T) {
 	}
 }
 
+// DecisionCache: re-put no mesmo key não duplica.
+func TestDecisionCache_ReputSameKeyNoDuplicate(t *testing.T) {
+	c := NewDecisionCache(4)
+	c.Put("x", []llmDecision{{Gate: "x"}})
+	c.Put("x", []llmDecision{{Gate: "x"}, {Gate: "y"}})
+	d, ok := c.Get("x")
+	if !ok || len(d) != 2 {
+		t.Errorf("x deveria ter 2 entries, got %d", len(d))
+	}
+}
+
+// DecisionCache: cache nil é no-op.
+func TestDecisionCache_NilSafe(t *testing.T) {
+	var c *DecisionCache
+	if _, ok := c.Get("k"); ok {
+		t.Error("nil cache deveria devolver ok=false")
+	}
+	c.Put("k", []llmDecision{{Gate: "k"}}) // não pode panic
+}
+
+// Default cap quando cap <= 0.
+func TestDecisionCache_DefaultCap(t *testing.T) {
+	c := NewDecisionCache(0)
+	if c.cap != 64 {
+		t.Errorf("cap = %d, quero 64", c.cap)
+	}
+	c = NewDecisionCache(-5)
+	if c.cap != 64 {
+		t.Errorf("cap negative = %d, quero 64", c.cap)
+	}
+}
+
 // --- helpers ---
 
 func decisionByGate(t *testing.T, ds []Decision, g Gate) Decision {

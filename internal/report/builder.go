@@ -112,10 +112,18 @@ type Component struct {
 }
 
 // ReleaseNotes agregado.
+//
+// ExecutiveSummary/Groups/BreakingChanges são populados por
+// buildReleaseNotes (determinístico, sem LLM) ou pelo narrative
+// analyzer (LLM, opcional). ScoreTrendNarrative/SolidInsights são
+// puramente LLM — vazios quando o analyzer não rodou ou falhou, e o
+// dashboard (§16 + score trend) já os esconde nesse caso.
 type ReleaseNotes struct {
-	ExecutiveSummary string        `json:"executive_summary"`
-	Groups           []ChangeGroup `json:"groups"`
-	BreakingChanges  []ChangeItem  `json:"breaking_changes"`
+	ExecutiveSummary    string        `json:"executive_summary"`
+	Groups              []ChangeGroup `json:"groups"`
+	BreakingChanges     []ChangeItem  `json:"breaking_changes"`
+	ScoreTrendNarrative string        `json:"score_trend_narrative,omitempty"`
+	SolidInsights       string        `json:"solid_insights,omitempty"`
 }
 
 // ChangeGroup features/bugfix/etc.
@@ -169,6 +177,10 @@ type Analyzer struct {
 	ID              string           `json:"id"`
 	Version         string           `json:"version"`
 	Applicability   string           `json:"applicability"`
+	// ApplicabilitySource indica quem produziu a decisão de applicability
+	// ("heuristic" | "llm" | "llm-fallback"). Vazio = heurística pura (default
+	// histórico); consumers antigos ignoram.
+	ApplicabilitySource string           `json:"applicability_source,omitempty"`
 	ExecutionStatus *string          `json:"execution_status,omitempty"`
 	Score           *float64         `json:"score,omitempty"`
 	DurationMS      int              `json:"duration_ms"`

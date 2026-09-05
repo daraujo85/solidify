@@ -109,22 +109,23 @@ type analyzerFunc func(ctx context.Context, cfg config.Config, dir string, logge
 // NOT_APPLICABLE/CONDITIONAL sem config vira skip sem gastar exec/rede.
 func runOrSkip(ctx context.Context, d applicability.Decision, id string, cfg config.Config, dir string, logger *slog.Logger, fn analyzerFunc) report.Analyzer {
 	if d.Verdict == applicability.NotApplicable {
-		return skippedAnalyzer(id, string(d.Verdict), "skipped:not_applicable", d.Reason)
+		return skippedAnalyzer(id, string(d.Verdict), "skipped:not_applicable", d.Reason, string(d.Source))
 	}
 	if d.Verdict == applicability.Conditional {
-		return skippedAnalyzer(id, string(d.Verdict), "skipped:not_configured", d.Reason)
+		return skippedAnalyzer(id, string(d.Verdict), "skipped:not_configured", d.Reason, string(d.Source))
 	}
 	return fn(ctx, cfg, dir, logger)
 }
 
-func skippedAnalyzer(id, applicabilityVerdict, status, reason string) report.Analyzer {
+func skippedAnalyzer(id, applicabilityVerdict, status, reason, source string) report.Analyzer {
 	return report.Analyzer{
-		ID:              id,
-		Applicability:   applicabilityVerdict,
-		ExecutionStatus: statusPtr(status),
-		Findings:        []map[string]any{},
-		Metrics:         map[string]any{},
-		Limitations:     []string{reason},
+		ID:                  id,
+		Applicability:       applicabilityVerdict,
+		ApplicabilitySource: source,
+		ExecutionStatus:     statusPtr(status),
+		Findings:            []map[string]any{},
+		Metrics:             map[string]any{},
+		Limitations:         []string{reason},
 	}
 }
 

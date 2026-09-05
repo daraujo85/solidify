@@ -271,12 +271,15 @@ type ExternalProvider struct {
 // Selection controla a escolha de modelos (SAI-063).
 // PeerA adicionado em SAI-118 — peer_a via http-combo usa o
 // mesmo padrão de PeerB (preferred[] + exclude[]).
+// Narrative adicionado para o analyzer de release-notes (executive
+// summary + score trend + SOLID insights); vazio = desligado.
 type Selection struct {
-	Mode    string        `json:"mode"`
-	PeerA   ModelChoice   `json:"peer_a,omitempty"` // SAI-118
-	PeerB   ModelChoice   `json:"peer_b"`
-	Arbiter ArbiterChoice `json:"arbiter"`
-	Probe   Probe         `json:"probe"`
+	Mode      string       `json:"mode"`
+	PeerA     ModelChoice  `json:"peer_a,omitempty"` // SAI-118
+	PeerB     ModelChoice  `json:"peer_b"`
+	Arbiter   ArbiterChoice `json:"arbiter"`
+	Narrative ModelChoice  `json:"narrative,omitempty"`
+	Probe     Probe        `json:"probe"`
 }
 
 // ModelChoice lista preferências e exclusões de modelo.
@@ -469,11 +472,12 @@ func Default() Config {
 				RequestTimeoutSeconds: 180,
 			},
 			Selection: Selection{
-				Mode:    "hybrid",
-				PeerA:   ModelChoice{Preferred: []string{"solidai-peer-a"}, Exclude: []string{}}, // SAI-118
-				PeerB:   ModelChoice{Preferred: []string{}, Exclude: []string{}},
-				Arbiter: ArbiterChoice{Preferred: []string{}, Exclude: []string{}, MustDifferFromPeerB: true},
-				Probe:   Probe{Enabled: true, CacheHours: 168, RequireJSONCompliance: true},
+				Mode:      "hybrid",
+				PeerA:     ModelChoice{Preferred: []string{"solidai-peer-a"}, Exclude: []string{}}, // SAI-118
+				PeerB:     ModelChoice{Preferred: []string{}, Exclude: []string{}},
+				Arbiter:   ArbiterChoice{Preferred: []string{}, Exclude: []string{}, MustDifferFromPeerB: true},
+				Narrative: ModelChoice{Preferred: []string{}, Exclude: []string{}}, // opt-in; vazio = desligado
+				Probe:     Probe{Enabled: true, CacheHours: 168, RequireJSONCompliance: true},
 			},
 			Review: Review{
 				PeerPromptVersion:    "peer-review-v1",

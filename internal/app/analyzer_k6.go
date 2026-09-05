@@ -21,13 +21,13 @@ import (
 func runK6Analyzer(ctx context.Context, cfg config.Config, dir string, logger *slog.Logger) report.Analyzer {
 	ld := cfg.Analyzers.Load
 	if len(cfg.Targets.API) == 0 {
-		return skippedAnalyzer("k6", "CONDITIONAL", "skipped:not_configured", "targets.api vazio")
+		return skippedAnalyzer("k6", "CONDITIONAL", "skipped:not_configured", "targets.api vazio", "")
 	}
 	target := cfg.Targets.API[0]
 
 	guard := &zap.TargetGuard{Allowlist: zap.DefaultAllowlist(), AllowProd: ld.AllowProd}
 	if err := guard.Validate(target); err != nil {
-		return skippedAnalyzer("k6", "APPLICABLE", "skipped:target_not_allowed", err.Error())
+		return skippedAnalyzer("k6", "APPLICABLE", "skipped:target_not_allowed", err.Error(), "")
 	}
 
 	k6cfg := k6.Config{
@@ -41,13 +41,13 @@ func runK6Analyzer(ctx context.Context, cfg config.Config, dir string, logger *s
 		AllowProd:    ld.AllowProd,
 	}
 	if k6cfg.Mode == "" || k6cfg.Mode == k6.ModeDisabled {
-		return skippedAnalyzer("k6", "CONDITIONAL", "skipped:not_configured", "analyzers.load.mode = disabled")
+		return skippedAnalyzer("k6", "CONDITIONAL", "skipped:not_configured", "analyzers.load.mode = disabled", "")
 	}
 
 	// ModeContainer precisa de `docker` no PATH; sem isso o erro viria tarde
 	// como "summary não gerado" — melhor pular cedo com motivo claro.
 	if k6cfg.Mode == k6.ModeContainer && !toolAvailable("docker") {
-		return skippedAnalyzer("k6", "APPLICABLE", "skipped:tool_unavailable", "docker não encontrado no PATH (mode=container)")
+		return skippedAnalyzer("k6", "APPLICABLE", "skipped:tool_unavailable", "docker não encontrado no PATH (mode=container)", "")
 	}
 
 	// Quando rodando em container, target 127.0.0.1/localhost aponta pro
@@ -67,12 +67,12 @@ func runK6Analyzer(ctx context.Context, cfg config.Config, dir string, logger *s
 		return failedAnalyzer("k6", err)
 	}
 	if script == nil {
-		return skippedAnalyzer("k6", "APPLICABLE", "skipped:not_configured", "nenhum script/endpoint disponível")
+		return skippedAnalyzer("k6", "APPLICABLE", "skipped:not_configured", "nenhum script/endpoint disponível", "")
 	}
 
 	bin := "k6"
 	if !toolAvailable(bin) && k6cfg.Mode == k6.ModeBinary {
-		return skippedAnalyzer("k6", "APPLICABLE", "skipped:tool_unavailable", "binário k6 não encontrado no PATH")
+		return skippedAnalyzer("k6", "APPLICABLE", "skipped:tool_unavailable", "binário k6 não encontrado no PATH", "")
 	}
 
 	cctx, cancel := context.WithTimeout(ctx, k6cfg.Duration+2*time.Minute)

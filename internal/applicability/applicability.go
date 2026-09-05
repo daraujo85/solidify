@@ -81,6 +81,10 @@ type Profile struct {
 }
 
 // Decide devolve as decisões de applicability para todos os gates.
+//
+// Caminho puramente determinístico (zero-custo, sem I/O). Marcar
+// Source=heuristic em todas as decisions — quem chamou DecideWithContext
+// do LLMDecider substitui pelo Source correto.
 func Decide(p Profile) []Decision {
 	compSet := make(map[component.Component]bool)
 	for _, c := range p.Components {
@@ -88,7 +92,7 @@ func Decide(p Profile) []Decision {
 	}
 	hasCode := hasCodeChanges(p.ChangedPaths)
 
-	return []Decision{
+	ds := []Decision{
 		decideSonar(p, hasCode),
 		decideTests(p, hasCode),
 		decideSecurity(compSet),
@@ -98,6 +102,10 @@ func Decide(p Profile) []Decision {
 		decideMigration(p),
 		decideEnv(p),
 	}
+	for i := range ds {
+		ds[i].Source = SourceHeuristic
+	}
+	return ds
 }
 
 // decideSonar: roda quando há código. Sem config de qualidade vira

@@ -179,13 +179,23 @@
         "exclude": []
       },
       "peer_b": {
-        "preferred": [],
+        "preferred": [
+          "claude-coder"
+        ],
         "exclude": []
       },
       "arbiter": {
-        "preferred": [],
+        "preferred": [
+          "claude-planner"
+        ],
         "exclude": [],
         "must_differ_from_peer_b": true
+      },
+      "narrative": {
+        "preferred": [
+          "claude-resumo"
+        ],
+        "exclude": []
       },
       "probe": {
         "enabled": true,

@@ -23,7 +23,7 @@ func runLighthouseAnalyzer(ctx context.Context, cfg config.Config, dir string, l
 	bin := "lighthouse"
 	if _, err := exec.LookPath(bin); err != nil {
 		return skippedAnalyzer("lighthouse", "APPLICABLE", "skipped:tool_unavailable",
-			"binário lighthouse não encontrado no PATH")
+			"binário lighthouse não encontrado no PATH", "")
 	}
 
 	outFile, err := os.CreateTemp("", "solidify-lighthouse-*.json")

@@ -494,7 +494,14 @@ export function hydrateMockup(doc, report, opts = {}) {
       set(818, (delta >= 0 ? "+" : "") + delta + " pts");
       style(818, { color: STATUS_COLOR[delta >= 0 ? "ok" : "fail"].stroke });
     } else hide(815);
-    hide(819); hide(820); hide(822); hide(824); // narrativa/link LLM — sem fonte real
+    // Narrativas LLM opcionais (cfg.AI.Selection.Narrative): mostram só
+    // quando o campo veio populado no release_notes; sem campo = hide
+    // (mesma regra "never fabricate —").
+    const trendNarr = (report.release_notes && report.release_notes.score_trend_narrative) || "";
+    const solidInsight = (report.release_notes && report.release_notes.solid_insights) || "";
+    if (trendNarr) { set(820, trendNarr); show(820); } else hide(820);
+    if (solidInsight) { set(822, solidInsight); show(822); } else hide(822);
+    hide(819); hide(824); // ainda sem fonte real (resumo do delta em texto + link)
     show(780, 0, "flex");
   } else hide(780);
 
@@ -561,4 +568,5 @@ export function hydrateMockup(doc, report, opts = {}) {
   hide(1005, 1); hide(1009, 1); hide(1013, 1); // Manutenibilidade/Riscos/Desempenho
   hide(1021, 2); // Recomendação
   hide(1027, 3); // Próximos passos (lista inteira)
-}
+  // score_trend_narrative/solid_insights já renderizados acima (tpls 820/822)
+  // quando há campo; não há slot separado em §16 para eles.
