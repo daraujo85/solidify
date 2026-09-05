@@ -570,3 +570,4 @@ export function hydrateMockup(doc, report, opts = {}) {
   hide(1027, 3); // Próximos passos (lista inteira)
   // score_trend_narrative/solid_insights já renderizados acima (tpls 820/822)
   // quando há campo; não há slot separado em §16 para eles.
+}
