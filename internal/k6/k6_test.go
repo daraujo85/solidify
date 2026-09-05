@@ -77,6 +77,24 @@ func TestRenderSmokeScriptNoEps(t *testing.T) {
 	}
 }
 
+// Aceitação: RenderSmokeScript com endpoint de URL completa (cfg.Targets.API
+// real) não concatena com BASE — antes gerava
+// "http://a:1http://b:2" (URL malformada).
+func TestRenderSmokeScriptFullURLEndpoint(t *testing.T) {
+	eps := []EndpointsPrioritized{{Endpoint: "http://host.docker.internal:8766"}}
+	script, err := RenderSmokeScript("http://host.docker.internal:8766", eps, DefaultConfig())
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	s := string(script)
+	if strings.Contains(s, "BASE + 'http://") {
+		t.Errorf("concatenou BASE com URL completa: %s", s)
+	}
+	if !strings.Contains(s, "http.get('http://host.docker.internal:8766')") {
+		t.Errorf("endpoint completo não usado verbatim: %s", s)
+	}
+}
+
 // Aceitação: RenderSmokeScript weight.
 func TestRenderSmokeScriptWeight(t *testing.T) {
 	eps := []EndpointsPrioritized{{Endpoint: "/a", Weight: 2.5}}
@@ -158,13 +176,15 @@ func TestResolveScriptSkip(t *testing.T) {
 	}
 }
 
-// Aceitação: ParseK6SummaryJSON.
+// Aceitação: ParseK6SummaryJSON. Fixture no schema REAL do k6
+// --summary-export (plano, sem wrapper "values" — confirmado contra
+// output real de `docker run grafana/k6`, ver comentário em k6Metric).
 func TestParseK6SummaryJSON(t *testing.T) {
 	data := []byte(`{
 		"metrics":{
-			"http_req_duration":{"values":{"p(50)":50,"p(90)":150,"p(95)":400,"p(99)":800}},
-			"http_req_failed":{"values":{"rate":0.001}},
-			"http_reqs":{"values":{"count":1000,"rate":33.3}}
+			"http_req_duration":{"p(50)":50,"p(90)":150,"p(95)":400,"p(99)":800},
+			"http_req_failed":{"passes":1,"fails":999,"value":0.001},
+			"http_reqs":{"count":1000,"rate":33.3}
 		}
 	}`)
 	s, err := ParseK6SummaryJSON(data)
@@ -192,16 +212,17 @@ func TestParseK6SummaryJSONInvalid(t *testing.T) {
 	}
 }
 
-// Aceitação: ParseK6SummaryJSON threshold fail.
+// Aceitação: ParseK6SummaryJSON threshold fail. "thresholds" no k6 real é
+// invertido: true = violado (não "ok").
 func TestParseK6SummaryJSONThresholdFail(t *testing.T) {
 	data := []byte(`{
 		"metrics":{
 			"http_req_duration":{
-				"values":{"p(95)":500},
-				"threshold":{"sources":[{"name":"p(95)<500","ok":false}]}
+				"p(95)":500,
+				"thresholds":{"p(95)<500":true}
 			},
-			"http_req_failed":{"values":{"rate":0}},
-			"http_reqs":{"values":{"count":10,"rate":1}}
+			"http_req_failed":{"value":0},
+			"http_reqs":{"count":10,"rate":1}
 		}
 	}`)
 	s, err := ParseK6SummaryJSON(data)

@@ -61,7 +61,20 @@ func runK6Analyzer(ctx context.Context, cfg config.Config, dir string, logger *s
 		}
 	}
 
-	eps := k6.PrioritizeEndpoints(cfg.Targets.API, nil, 1.0, 1.0)
+	// cfg.Targets.API são URLs completas (não paths relativos a runTarget) —
+	// cada entrada precisa da MESMA reescrita loopback→docker que runTarget
+	// já leva, senão o container tenta bater em 127.0.0.1 dele mesmo pras
+	// entradas além da primeira.
+	runEndpoints := make([]string, len(cfg.Targets.API))
+	for i, ep := range cfg.Targets.API {
+		runEndpoints[i] = ep
+		if k6cfg.Mode == k6.ModeContainer {
+			if t, ok := rewriteLoopbackHost(ep); ok {
+				runEndpoints[i] = t
+			}
+		}
+	}
+	eps := k6.PrioritizeEndpoints(runEndpoints, nil, 1.0, 1.0)
 	script, _, err := k6.ResolveScript(runTarget, ld.ScriptPath, eps, k6cfg)
 	if err != nil {
 		return failedAnalyzer("k6", err)

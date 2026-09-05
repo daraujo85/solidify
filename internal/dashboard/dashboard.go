@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -177,46 +178,66 @@ func ServeEphemeral(cfg Config) (addr string, shutdown func(context.Context) err
 	return ln.Addr().String(), srv.Shutdown, nil
 }
 
+// runIndex releia o storeDir a cada list()/get() (protegido por
+// RWMutex) em vez de indexar só no boot — sem isso, um run novo
+// gerado após o dashboard subir nunca aparecia sem restart manual
+// (achado no debug de "só mostra Avaliador A": era run antigo, o
+// run5 nem tinha sido indexado ainda). Sem watcher/fsnotify: store
+// tem poucos runs, WalkDir+parse por request é barato e sempre
+// consistente com o disco.
 type runIndex struct {
 	dir  string
+	mu   sync.RWMutex
 	runs map[string]*report.Report
 }
 
 func loadIndex(dir string) (*runIndex, error) {
-	idx := &runIndex{dir: dir, runs: map[string]*report.Report{}}
-	if dir == "" {
-		return idx, nil
-	}
-	if _, err := os.Stat(dir); err != nil {
-		return idx, nil
-	}
-	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return err
-		}
-		if !strings.HasSuffix(path, ".json") {
-			return nil
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return nil
-		}
-		var r report.Report
-		if err := json.Unmarshal(data, &r); err != nil {
-			return nil
-		}
-		if r.Run.ID != "" {
-			idx.runs[r.Run.ID] = &r
-		}
-		return nil
-	})
-	if err != nil {
+	idx := &runIndex{dir: dir}
+	if err := idx.refresh(); err != nil {
 		return nil, err
 	}
 	return idx, nil
 }
 
+func (i *runIndex) refresh() error {
+	runs := map[string]*report.Report{}
+	if i.dir != "" {
+		if _, err := os.Stat(i.dir); err == nil {
+			err := filepath.WalkDir(i.dir, func(path string, d fs.DirEntry, err error) error {
+				if err != nil || d.IsDir() {
+					return err
+				}
+				if !strings.HasSuffix(path, ".json") {
+					return nil
+				}
+				data, err := os.ReadFile(path)
+				if err != nil {
+					return nil
+				}
+				var r report.Report
+				if err := json.Unmarshal(data, &r); err != nil {
+					return nil
+				}
+				if r.Run.ID != "" {
+					runs[r.Run.ID] = &r
+				}
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+		}
+	}
+	i.mu.Lock()
+	i.runs = runs
+	i.mu.Unlock()
+	return nil
+}
+
 func (i *runIndex) list() []runSummary {
+	i.refresh() // ignora erro de reload pontual; mantém último índice válido
+	i.mu.RLock()
+	defer i.mu.RUnlock()
 	out := make([]runSummary, 0, len(i.runs))
 	for _, r := range i.runs {
 		out = append(out, summarize(r))
@@ -226,6 +247,9 @@ func (i *runIndex) list() []runSummary {
 }
 
 func (i *runIndex) get(id string) (*report.Report, error) {
+	i.refresh()
+	i.mu.RLock()
+	defer i.mu.RUnlock()
 	r, ok := i.runs[id]
 	if !ok {
 		return nil, errors.New("run não encontrado")

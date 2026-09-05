@@ -97,7 +97,10 @@ func RenderSmokeScript(target string, eps []EndpointsPrioritized, cfg Config) ([
 	sb.WriteString("// Auto-generated smoke script — Solidify\n")
 	sb.WriteString("import http from 'k6/http';\n")
 	sb.WriteString("import { check, sleep } from 'k6';\n\n")
-	fmt.Fprintf(&sb, "export const options = {\n  vus: %d,\n  duration: '%s',\n  thresholds: {\n    http_req_duration: ['p(95)<%d', 'p(99)<%d'],\n    http_req_failed: ['rate<%f'],\n  },\n};\n\n", vus, dur, cfg.ThresholdP95.Milliseconds(), cfg.ThresholdP99.Milliseconds(), cfg.MaxErrorRate)
+	// summaryTrendStats: default do k6 não inclui p(99) (só até p(95)) —
+	// sem isso ParseK6SummaryJSON sempre leria P99=0 mesmo com threshold
+	// configurado e passando.
+	fmt.Fprintf(&sb, "export const options = {\n  vus: %d,\n  duration: '%s',\n  summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],\n  thresholds: {\n    http_req_duration: ['p(95)<%d', 'p(99)<%d'],\n    http_req_failed: ['rate<%f'],\n  },\n};\n\n", vus, dur, cfg.ThresholdP95.Milliseconds(), cfg.ThresholdP99.Milliseconds(), cfg.MaxErrorRate)
 	fmt.Fprintf(&sb, "const BASE = '%s';\n\n", target)
 	sb.WriteString("export default function () {\n")
 	for _, ep := range eps {
@@ -106,7 +109,16 @@ func RenderSmokeScript(target string, eps []EndpointsPrioritized, cfg Config) ([
 			w = 1.0
 		}
 		fmt.Fprintf(&sb, "  // weight=%.2f\n", w)
-		fmt.Fprintf(&sb, "  http.get(BASE + '%s');\n", ep.Endpoint)
+		// cfg.Targets.API guarda URLs completas ("http://host:port"), não
+		// paths relativos — concatenar sempre com BASE gerava URL malformada
+		// ("http://a:1http://b:2"). Endpoint com scheme próprio é usado
+		// verbatim; só path relativo (endpoint detectado no diff, futuro) usa
+		// BASE + path.
+		if strings.Contains(ep.Endpoint, "://") {
+			fmt.Fprintf(&sb, "  http.get('%s');\n", ep.Endpoint)
+		} else {
+			fmt.Fprintf(&sb, "  http.get(BASE + '%s');\n", ep.Endpoint)
+		}
 	}
 	sb.WriteString("  sleep(1);\n}\n")
 	return []byte(sb.String()), nil
@@ -162,27 +174,49 @@ type RunConfig struct {
 }
 
 // k6Summary subset do JSON output do k6 --summary-export.
+//
+// root_group.checks existia aqui como []k6Check, mas o k6 real exporta
+// checks como objeto (map), não array — json.Unmarshal falhava em
+// QUALQUER run real (campo nunca lido em Summary, então é dead weight
+// causando crash à toa). Removido; sem perda de funcionalidade.
 type k6Summary struct {
-	Metrics   map[string]k6Metric `json:"metrics"`
-	RootGroup struct {
-		Checks []k6Check `json:"checks,omitempty"`
-	} `json:"root_group,omitempty"`
+	Metrics map[string]k6Metric `json:"metrics"`
 }
 
+// k6Metric — schema real do k6 --summary-export é PLANO: os campos
+// numéricos (count/rate/avg/min/med/max/p(90)/p(95).../value/passes/fails)
+// ficam direto no objeto da métrica, sem wrapper "values" nem "threshold.
+// sources[]" — essa era a suposição original do código, nunca bateu com
+// nenhuma versão real do k6 (json.Unmarshal não erra, porque campos
+// desconhecidos são ignorados; só resultava em tudo zerado em silêncio).
+// "thresholds" é um objeto separado: chave = expressão do threshold,
+// valor bool = **violado** (true=falhou, false=passou — invertido do que
+// o nome sugere; confirmado comparando com "✓"/"✗" do output do k6 real).
 type k6Metric struct {
-	Values    map[string]float64 `json:"values"`
-	Threshold *struct {
-		Sources []struct {
-			Name string `json:"name,omitempty"`
-			OK   bool   `json:"ok"`
-		} `json:"sources,omitempty"`
-	} `json:"threshold,omitempty"`
+	Values     map[string]float64
+	Thresholds map[string]bool
 }
 
-type k6Check struct {
-	Name   string `json:"name"`
-	Passes int    `json:"passes"`
-	Fails  int    `json:"fails"`
+func (m *k6Metric) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	m.Values = make(map[string]float64, len(raw))
+	for k, v := range raw {
+		if k == "thresholds" {
+			var th map[string]bool
+			if err := json.Unmarshal(v, &th); err == nil {
+				m.Thresholds = th
+			}
+			continue
+		}
+		var f float64
+		if err := json.Unmarshal(v, &f); err == nil {
+			m.Values[k] = f
+		}
+	}
+	return nil
 }
 
 // ParseK6SummaryJSON parseia k6 summary-export JSON.
@@ -199,19 +233,17 @@ func ParseK6SummaryJSON(data []byte) (*Summary, error) {
 		s.P99 = msToDuration(m.Values["p(99)"])
 	}
 	if m, ok := raw.Metrics["http_req_failed"]; ok {
-		s.ErrorRate = m.Values["rate"]
+		s.ErrorRate = m.Values["value"]
 	}
 	if m, ok := raw.Metrics["http_reqs"]; ok {
 		s.Requests = int(m.Values["count"])
 		s.Throughput = m.Values["rate"]
 	}
 	// Threshold pass/fail.
-	for _, m := range raw.Metrics {
-		if m.Threshold != nil {
-			for _, src := range m.Threshold.Sources {
-				if !src.OK {
-					s.ThresholdFailed = append(s.ThresholdFailed, src.Name)
-				}
+	for name, m := range raw.Metrics {
+		for expr, breached := range m.Thresholds {
+			if breached {
+				s.ThresholdFailed = append(s.ThresholdFailed, name+": "+expr)
 			}
 		}
 	}
