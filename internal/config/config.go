@@ -434,8 +434,8 @@ func Default() Config {
 			ExternalProvider: ExternalProvider{
 				Type:                  "openai-compatible",
 				Preset:                "9router",
-				BaseURLHost:           "http://127.0.0.1:20128/v1",
-				BaseURLDocker:         "http://host.docker.internal:20128/v1",
+				BaseURLHost:           "http://127.0.0.1:20128",
+				BaseURLDocker:         "http://host.docker.internal:20128",
 				APIKeyEnv:             "ANTHROPIC_AUTH_TOKEN",
 				ModelDiscovery:        true,
 				RequestTimeoutSeconds: 180,

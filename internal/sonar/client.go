@@ -250,18 +250,23 @@ func (c *Client) get(ctx context.Context, path string, params url.Values) ([]byt
 }
 
 // applyAuth injeta credenciais.
-// SonarCloud moderno: Authorization: Bearer <token>
-// SonarQube ≤9.x: Authorization: Basic base64(login:token)
+//
+// Token-only (Login vazio, caso comum): Basic base64(token:) — token como
+// usuário, senha vazia. É o método documentado pela Sonar que funciona em
+// qualquer versão (SonarQube ≤9.x incluso); Bearer puro foi tentado antes
+// aqui e retorna 401 num SonarQube 9.9.8 real (confirmado por teste manual
+// contra servidor local). Login+Token explícitos (usuário/senha legado):
+// Basic base64(login:token).
 func (c *Client) applyAuth(req *http.Request) {
 	if c.Token == "" {
 		return
 	}
+	user, pass := c.Token, ""
 	if c.Login != "" {
-		cred := base64.StdEncoding.EncodeToString([]byte(c.Login + ":" + c.Token))
-		req.Header.Set("Authorization", "Basic "+cred)
-		return
+		user, pass = c.Login, c.Token
 	}
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	cred := base64.StdEncoding.EncodeToString([]byte(user + ":" + pass))
+	req.Header.Set("Authorization", "Basic "+cred)
 }
 
 // apiError categoriza erro HTTP.

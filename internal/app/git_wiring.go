@@ -181,6 +181,118 @@ func buildMigrations(dir string, changes []gitx.FileChange, cfg config.Detectors
 	return out
 }
 
+// envVarLinePattern casa "NOME=valor" numa linha de diff (prefixo +/- já
+// removido) — mesma convenção de dotenv usada pelos 3 arquivos em
+// cfg.Detectors.EnvDocumentationFiles.
+var envVarLinePattern = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)=(.*)$`)
+
+// likelySecretEnvName heurística por nome (mesmas keywords que qualquer
+// scanner de secret usa) — nunca abre o valor real (arquivos de doc são
+// .example/.sample/.template, não .env de verdade; mesmo assim não expomos
+// o RHS em nenhum campo do report).
+var likelySecretEnvName = regexp.MustCompile(`(?i)(SECRET|TOKEN|PASSWORD|PWD|CREDENTIAL|API_KEY|PRIVATE_KEY)`)
+
+// buildEnvChanges detecta variáveis de ambiente adicionadas/removidas nos
+// arquivos de documentação (.env.example etc., cfg.EnvDocumentationFiles) —
+// única fonte confiável de "isso é uma env var" sem parsear runtime de N
+// linguagens. Documented=true sempre (viemos do próprio arquivo de doc);
+// Components/References vêm de outros arquivos do MESMO diff que citam o
+// nome — sinal real, não fabricado, mas incompleto por natureza (não
+// escaneia o repo inteiro). Sem hunks nesses arquivos -> slice vazia.
+// ponytail: Required/DeploymentAction sempre nil/"" (sem heurística
+// confiável ainda); grep incremental fora do diff ficaria caro em repos
+// grandes — upgrade quando houver sinal de uso real que justifique o custo.
+func buildEnvChanges(diffFiles []gitx.DiffFile, cfg config.Detectors) []report.EnvChange {
+	docSet := make(map[string]bool, len(cfg.EnvDocumentationFiles))
+	for _, f := range cfg.EnvDocumentationFiles {
+		docSet[f] = true
+	}
+
+	type state struct {
+		added, removed bool
+		defaultVal     string
+	}
+	found := make(map[string]*state)
+	order := []string{}
+
+	for _, df := range diffFiles {
+		if !docSet[filepath.Base(df.Path)] {
+			continue
+		}
+		for _, h := range df.Hunks {
+			for _, line := range strings.Split(h.Content, "\n") {
+				if len(line) < 2 {
+					continue
+				}
+				sign, rest := line[0], line[1:]
+				if sign != '+' && sign != '-' {
+					continue
+				}
+				m := envVarLinePattern.FindStringSubmatch(rest)
+				if m == nil {
+					continue
+				}
+				name := m[1]
+				st, ok := found[name]
+				if !ok {
+					st = &state{}
+					found[name] = st
+					order = append(order, name)
+				}
+				if sign == '+' {
+					st.added = true
+					st.defaultVal = m[2]
+				} else {
+					st.removed = true
+				}
+			}
+		}
+	}
+	if len(found) == 0 {
+		return []report.EnvChange{}
+	}
+
+	out := make([]report.EnvChange, 0, len(found))
+	for _, name := range order {
+		st := found[name]
+		status := "modified"
+		switch {
+		case st.added && !st.removed:
+			status = "added"
+		case st.removed && !st.added:
+			status = "removed"
+		}
+		var components []string
+		var refs []map[string]any
+		for _, df := range diffFiles {
+			if docSet[filepath.Base(df.Path)] {
+				continue
+			}
+			for _, h := range df.Hunks {
+				if strings.Contains(h.Content, name) {
+					components = append(components, df.Path)
+					refs = append(refs, map[string]any{"file": df.Path})
+					break
+				}
+			}
+		}
+		ec := report.EnvChange{
+			Name:         name,
+			Status:       status,
+			Components:   components,
+			Documented:   true,
+			LikelySecret: likelySecretEnvName.MatchString(name),
+			References:   refs,
+		}
+		if st.added {
+			hasDefault := strings.TrimSpace(st.defaultVal) != ""
+			ec.HasDefault = &hasDefault
+		}
+		out = append(out, ec)
+	}
+	return out
+}
+
 // migrationID deriva um ID estável e curto do path (fnv32, hex) — só
 // precisa ser único e determinístico entre runs; sem esquema de
 // numeração de negócio (isso é papel do framework de migration, não

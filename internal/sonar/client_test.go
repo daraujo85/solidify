@@ -45,13 +45,15 @@ func TestNewClientTrimSlash(t *testing.T) {
 	}
 }
 
-// Aceitação: bearer token.
-func TestApplyAuthBearer(t *testing.T) {
+// Aceitação: token-only vira Basic(token:) — confirmado contra SonarQube
+// 9.9.8 real que Bearer puro retorna 401 nesse caso.
+func TestApplyAuthTokenOnly(t *testing.T) {
 	c := NewClient(ClientConfig{HostURL: "x", Token: "abc"})
 	req, _ := http.NewRequest("GET", "x", nil)
 	c.applyAuth(req)
-	if got := req.Header.Get("Authorization"); got != "Bearer abc" {
-		t.Errorf("got %q", got)
+	want := "Basic " + base64.StdEncoding.EncodeToString([]byte("abc:"))
+	if got := req.Header.Get("Authorization"); got != want {
+		t.Errorf("got %q want %q", got, want)
 	}
 }
 

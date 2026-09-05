@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -153,11 +154,17 @@ func runRun(args []string, env Env, logger *slog.Logger) (retErr error) {
 	}
 
 	runID := report.NewRunID("run", time.Now())
+	absDir, err := filepath.Abs(*dir)
+	if err != nil {
+		absDir = *dir // fallback: caminho como veio do flag, nunca fabricado
+	}
 	bInput := report.BuilderInput{
-		RunID:     runID,
-		Profile:   *profileName,
-		StartedAt: time.Now(),
-		Git:       report.GitInfo{BaseRef: *base, HeadRef: *head},
+		RunID:       runID,
+		Profile:     *profileName,
+		StartedAt:   time.Now(),
+		Git:         report.GitInfo{BaseRef: *base, HeadRef: *head},
+		ProjectName: filepath.Base(absDir),
+		ProjectPath: absDir,
 	}
 	defer PartialReportDeferred(&bInput, logger, &retErr)
 
@@ -218,6 +225,7 @@ func runRun(args []string, env Env, logger *slog.Logger) (retErr error) {
 		bInput.Git.ChangedFiles = buildChangedFiles(changes)
 		bInput.Migrations = buildMigrations(*dir, changes, cfg.Detectors)
 	}
+	bInput.EnvChanges = buildEnvChanges(diffFiles, cfg.Detectors)
 
 	// SAI-129B: heurística determinística de applicability roda 1x sobre
 	// o diff bruto, ANTES de qualquer peer — mesmo sinal pros dois (mesmo
@@ -236,8 +244,11 @@ func runRun(args []string, env Env, logger *slog.Logger) (retErr error) {
 	if keyEnv == "" {
 		keyEnv = ai.NineRouterTokenEnv
 	}
-	provider := ai.NewOpenAIProvider(host, os.Getenv(keyEnv)).WithProviderName("9router")
 	timeout := time.Duration(cfg.AI.ExternalProvider.RequestTimeoutSeconds) * time.Second
+	provider := ai.NewOpenAIProvider(host, os.Getenv(keyEnv)).WithProviderName("9router")
+	if timeout > 0 {
+		provider = provider.WithHTTPClient(&http.Client{Timeout: timeout})
+	}
 
 	// --- peer_a ---
 	var peerARes *peer.ExecutorResult

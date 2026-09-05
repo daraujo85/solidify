@@ -241,6 +241,14 @@ type runSummary struct {
 	RiskLevel   string   `json:"risk_level"`
 	GateStatus  string   `json:"gate_status"`
 	FinalizedAt string   `json:"finalized_at"`
+	// ProjectName/ProjectPath — basename/caminho absoluto do --dir
+	// analisado (RunInfo, capturado em runRun); BaseRef/HeadRef — branches
+	// do diff. Únicos dados reais de "qual projeto"/escopo disponíveis
+	// pra distinguir runs na lista.
+	ProjectName string `json:"project_name"`
+	ProjectPath string `json:"project_path"`
+	BaseRef     string `json:"base_ref"`
+	HeadRef     string `json:"head_ref"`
 }
 
 func summarize(r *report.Report) runSummary {
@@ -252,5 +260,9 @@ func summarize(r *report.Report) runSummary {
 		RiskLevel:   r.Risk.Level,
 		GateStatus:  r.QualityGate.Status,
 		FinalizedAt: r.Run.FinishedAt,
+		ProjectName: r.Run.ProjectName,
+		ProjectPath: r.Run.ProjectPath,
+		BaseRef:     r.Git.BaseRef,
+		HeadRef:     r.Git.HeadRef,
 	}
 }

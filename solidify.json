@@ -112,9 +112,9 @@
     "sonar": {
       "enabled": true,
       "required_in_contractual": false,
-      "base_url": "",
+      "base_url": "http://localhost:9000",
       "token_env": "SONAR_TOKEN",
-      "project_key": ""
+      "project_key": "solidify"
     },
     "security": {
       "enabled": true,
@@ -164,8 +164,8 @@
     "external_provider": {
       "type": "openai-compatible",
       "preset": "9router",
-      "base_url_host": "http://127.0.0.1:20128/v1",
-      "base_url_docker": "http://host.docker.internal:20128/v1",
+      "base_url_host": "http://127.0.0.1:20128",
+      "base_url_docker": "http://host.docker.internal:20128",
       "api_key_env": "ANTHROPIC_AUTH_TOKEN",
       "model_discovery": true,
       "request_timeout_seconds": 180

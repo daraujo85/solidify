@@ -57,6 +57,11 @@ type RunInfo struct {
 	EvidenceHash    string  `json:"evidence_hash"`
 	OS              *string `json:"os,omitempty"`
 	Arch            *string `json:"arch,omitempty"`
+	// ProjectName/ProjectPath — nome (basename) e caminho absoluto do
+	// diretório analisado (`solidify run --dir=...`). Único identificador
+	// de "qual projeto" real e já disponível no CLI; nunca fabricado.
+	ProjectName string `json:"project_name,omitempty"`
+	ProjectPath string `json:"project_path,omitempty"`
 }
 
 // GitInfo contexto git.
@@ -335,6 +340,8 @@ type BuilderInput struct {
 	RunID            string
 	Profile          string
 	SolidifyVersion  string
+	ProjectName      string
+	ProjectPath      string
 	StartedAt        time.Time
 	FinishedAt       time.Time
 	ConfigHash       string
@@ -385,6 +392,8 @@ func (b *Builder) Build() (*Report, error) {
 			FinishedAt:      b.in.FinishedAt.UTC().Format(time.RFC3339),
 			ConfigHash:      b.in.ConfigHash,
 			EvidenceHash:    b.in.EvidenceHash,
+			ProjectName:     b.in.ProjectName,
+			ProjectPath:     b.in.ProjectPath,
 		},
 		Git:              b.in.Git,
 		Components:       b.in.Components,

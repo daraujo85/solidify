@@ -250,7 +250,7 @@ export function mapAIReviewers(report) {
     divergences: ai.divergences || [],
     actors: (ai.actors || []).map((a) => ({
       role: a.role, provider: a.provider, modelId: a.model_id,
-      status: a.status, fallbackUsed: !!a.fallback_used,
+      executedModel: a.executed_model, status: a.status, fallbackUsed: !!a.fallback_used,
     })),
   };
 }

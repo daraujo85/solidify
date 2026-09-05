@@ -69,6 +69,22 @@ async function loadTrend() {
   return r.json();
 }
 
+// Histórico real do projeto (mesmo project_path, runs anteriores à atual,
+// ordenados por finalized_at) — usado tanto pro gráfico Sonar quanto pro
+// "Score anterior" no Hero. Sem "agrupamento por projeto/branch" formal
+// ainda: usa project_path como única chave real disponível hoje. Nunca
+// fabrica ponto: reports que falharam ao carregar são só ignorados.
+async function loadProjectHistory(current) {
+  if (!current.run?.project_path) return [];
+  const runs = await loadRuns();
+  const prior = runs
+    .filter((x) => x.project_path === current.run.project_path && x.run_id !== current.run.id)
+    .sort((a, b) => (a.finalized_at || "").localeCompare(b.finalized_at || ""))
+    .slice(-5);
+  const reports = await Promise.all(prior.map((x) => loadRun(x.run_id).catch(() => null)));
+  return reports.filter(Boolean);
+}
+
 function score(n) {
   if (n == null || Number.isNaN(n)) return el("div", { class: "score na" }, "N/A");
   const node = el("div", { class: "score" }, "0");
@@ -76,29 +92,45 @@ function score(n) {
   return node;
 }
 
+// ISO -> "dd/mm/aaaa hh:mm" (pt-BR); ausente/inválido -> "—" (nunca fabrica).
+function fmtDateTime(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+}
+
 function viewRuns(runs) {
-  const wrap = el("div");
-  wrap.appendChild(el("h2", null, "Runs"));
+  const wrap = el("div", { class: "card" });
+  wrap.appendChild(el("div", { class: "card-header" }, "Runs"));
+  const body = el("div", { class: "card-body" });
   const t = el("table");
   t.appendChild(el("thead", null,
     el("tr", null,
       el("th", null, "Run ID"),
+      el("th", null, "Projeto"),
       el("th", null, "Profile"),
+      el("th", null, "Escopo"),
       el("th", null, "Gate"),
       el("th", null, "Score"),
-      el("th", null, "Risk"))));
+      el("th", null, "Risk"),
+      el("th", null, "Finalizado em"))));
   const tbody = el("tbody");
   for (const r of runs) {
     tbody.appendChild(el("tr", null,
       el("td", null,
         el("a", { href: `#/run/${encodeURIComponent(r.run_id)}` }, r.run_id)),
+      el("td", null, r.project_name || "—"),
       el("td", null, r.profile),
+      el("td", { class: "muted" }, r.base_ref || r.head_ref ? `${r.base_ref || "—"} → ${r.head_ref || "—"}` : "—"),
       el("td", null, badge(r.gate_status || "INCOMPLETE")),
       el("td", null, String(Math.round(r.quality || 0))),
-      el("td", null, r.risk_level || "LOW")));
+      el("td", null, el("span", { class: "pill " + severityClass(r.risk_level) }, r.risk_level || "LOW")),
+      el("td", null, fmtDateTime(r.finalized_at))));
   }
   t.appendChild(tbody);
-  wrap.appendChild(t);
+  body.appendChild(t);
+  wrap.appendChild(body);
   return wrap;
 }
 
@@ -479,6 +511,7 @@ async function render() {
     if (route.startsWith("run/")) {
       const id = route.slice(4);
       const r = await loadRun(id);
+      const projectHistory = await loadProjectHistory(r);
       // Página de run usa o mockup real do Design Canvas via iframe (pedido
       // explícito: "era pra ficar idêntico") — hidratado com dado real por
       // data-dc-tpl (hydrate.js), em vez de recomposto em CSS/JS à mão.
@@ -503,7 +536,7 @@ async function render() {
           const started = performance.now();
           (function waitReady() {
             if (doc.querySelector('[data-dc-tpl="129"]') || performance.now() - started > 8000) {
-              hydrateMockup(doc, r);
+              hydrateMockup(doc, r, { history: projectHistory });
               const resize = () => { frame.style.height = doc.documentElement.scrollHeight + "px"; };
               resize();
               // conteúdo pode crescer depois da 1ª medição (fonte carregando,
