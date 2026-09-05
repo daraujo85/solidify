@@ -159,7 +159,7 @@
   },
   "ai": {
     "peer_a": {
-      "source": "terminal-mcp"
+      "source": "http-combo"
     },
     "external_provider": {
       "type": "openai-compatible",
@@ -174,7 +174,7 @@
       "mode": "hybrid",
       "peer_a": {
         "preferred": [
-          "solidai-peer-a"
+          "claude-tools"
         ],
         "exclude": []
       },
