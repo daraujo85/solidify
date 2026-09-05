@@ -290,21 +290,6 @@ export function mapSolidPrinciples(report) {
   });
 }
 
-// Topbar — só campos com dado real hoje. Report não tem project/PR/team
-// (ver internal/report/builder.go: sem Project/PRNumber/Team; GitInfo.HeadSHA
-// nunca é setado por run.go) — nunca fabricar, cada campo some se ausente.
-export function mapTopbar(report) {
-  const run = report.run || {};
-  const git = report.git || {};
-  const firstCommit = (git.commits || [])[0];
-  return {
-    runId: run.id || null, profile: run.profile || null,
-    headRef: git.head_ref || null, baseRef: git.base_ref || null,
-    shortSha: firstCommit ? firstCommit.short_sha : null,
-    finishedAt: run.finished_at || null,
-  };
-}
-
 // Card "Qualidade Sustentável" do mockup — texto [derivado] do veredicto real
 // do gate + violações SOLID + risk.level, nunca métrica inventada. Sem gate
 // avaliado -> empty (mesma regra do resto do dashboard, view omite o card).

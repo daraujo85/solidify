@@ -5,7 +5,7 @@
 import {
   mapSonarSection, mapLighthouseSection, mapK6Section,
   mapSecuritySection, mapCoverageSection, mapAnalyzersStrip, mapApplicability,
-  mapSolidPrinciples, mapTopbar, mapSustainability,
+  mapSolidPrinciples, mapSustainability,
   scoreClass, severityClass, gateVerdict,
 } from "./mapping.js";
 import { el, badge, emptyCard, animateNumber, animateWidth, gaugeTile, svgIcon } from "./dom.js";
@@ -18,6 +18,7 @@ import { hydrateMockup } from "./hydrate.js";
 
 const root = document.getElementById("root");
 const runNav = document.getElementById("runNav");
+const mainEl = document.querySelector("main");
 const hash = () => location.hash.replace(/^#\/?/, "") || "runs";
 
 // Sub-nav de âncoras — só existe na página de run (§ da Fase A2).
@@ -202,60 +203,6 @@ function viewOverview(r) {
     wrap.appendChild(el("h3", null, "Recommendations"), recs);
   }
   return wrap;
-}
-
-// §4.1 Slider de aprovação: simulação local do limiar de score, NUNCA
-// persiste (contrato: "mudar o slider nunca deve gravar nada"). Sem
-// fetch/write — só recalcula texto no DOM a partir do state em memória.
-// Vive na topbar (layout do mockup), não mais dentro do card de overview.
-const DEFAULT_APPROVAL_LIMIT = 80; // [novo] no contrato: vem da política do repo; sem .solidify.yml exposto no report, usa default documentado.
-function approvalSliderControl(qualityScore) {
-  const out = el("span", { class: "muted" });
-  function paint(limit) {
-    const folga = qualityScore - limit;
-    out.textContent = folga >= 0
-      ? `Aprovado (simulado) — folga de ${folga.toFixed(0)} pts acima do limite ${limit}`
-      : `Reprovado pelo simulador — faltam ${Math.abs(folga).toFixed(0)} pts para o limite ${limit}`;
-  }
-  const slider = el("input", {
-    type: "range", min: "50", max: "100", value: String(DEFAULT_APPROVAL_LIMIT),
-    oninput: (e) => paint(Number(e.target.value)),
-  });
-  paint(DEFAULT_APPROVAL_LIMIT);
-  return el("div", { class: "topbar-slider" },
-    el("span", { class: "muted" }, "Aprovar com base em"), slider, out);
-}
-
-// Cabeçalho fixo (topbar): contexto git + slider de aprovação por run.
-// Fora do fluxo de render() do #root pra ficar sempre visível (mockup).
-// Campos = só o que mapTopbar expõe como real (sem project/PR/team — não
-// existem no Report hoje, ver mapping.js); cada campo some se ausente.
-function paintTopbar(r) {
-  const bar = document.getElementById("topbar");
-  while (bar.firstChild) bar.removeChild(bar.firstChild);
-  const t = mapTopbar(r);
-  bar.appendChild(el("span", { class: "page-title", style: "font-size:15px" },
-    t.profile || "run", " · ", t.runId || ""));
-  const fields = [
-    ["Release", t.headRef], ["Base", t.baseRef],
-    ["Commit", t.shortSha], ["Analisado em", t.finishedAt],
-  ].filter(([, v]) => v);
-  for (const [label, value] of fields) {
-    bar.appendChild(el("span", { class: "sep" }));
-    bar.appendChild(el("div", { class: "tb-field" },
-      el("span", { class: "tb-label" }, label), el("strong", null, value)));
-  }
-  const quality = (typeof r.scores.quality === "number") ? r.scores.quality : null;
-  if (quality != null) {
-    bar.appendChild(el("span", { class: "sep" }));
-    bar.appendChild(approvalSliderControl(quality));
-  }
-}
-
-function resetTopbar() {
-  const bar = document.getElementById("topbar");
-  while (bar.firstChild) bar.removeChild(bar.firstChild);
-  bar.appendChild(el("span", { class: "page-title", style: "font-size:15px" }, "Solidify Release Quality"));
 }
 
 // §3 Painel SOLIDIFY — grid único de 5 colunas, uma por princípio (refino
@@ -513,11 +460,17 @@ function markActiveNav(route) {
 async function render() {
   const route = hash();
   markActiveNav(route);
+  // Página de run embute o mockup real (já é um dashboard completo, com seu
+  // próprio respiro interno) — o padding do app-shell só sobra como moldura
+  // extra ao redor, encolhendo o header/conteúdo abaixo de 100% de largura.
+  // Some nessa rota; outras rotas (lista/trend) continuam com o padding padrão.
+  const isRunDetail = route.startsWith("run/");
+  mainEl.classList.toggle("full-bleed", isRunDetail);
+  root.style.marginTop = isRunDetail ? "0" : "16px";
   // limpa DOM sem innerHTML (mitiga XSS).
   while (root.firstChild) root.removeChild(root.firstChild);
   try {
     if (route === "runs") {
-      resetTopbar();
       clearRunNav();
       const runs = await loadRuns();
       root.appendChild(viewRuns(runs));
@@ -530,7 +483,6 @@ async function render() {
       // explícito: "era pra ficar idêntico") — hidratado com dado real por
       // data-dc-tpl (hydrate.js), em vez de recomposto em CSS/JS à mão.
       // Topbar externo/anchors do app somem: o mockup já traz os próprios.
-      resetTopbar();
       clearRunNav();
       // scrolling="no" + overflow:hidden: o iframe NUNCA tem barra própria —
       // só o document externo rola. Sem isso, entre o load e a 1ª medição de
@@ -575,17 +527,14 @@ async function render() {
     }
     // SAI-125: rota peer-reviews mostra trend.
     if (route === "peer-reviews") {
-      resetTopbar();
       clearRunNav();
       const trend = await loadTrend();
       root.appendChild(el("div", { class: "card" }, viewTrend(trend)));
       return;
     }
-    resetTopbar();
     clearRunNav();
     root.appendChild(el("p", null, "Rota desconhecida: ", route));
   } catch (err) {
-    resetTopbar();
     clearRunNav();
     root.appendChild(el("p", { class: "muted" }, "Erro: ", err.message));
   }
