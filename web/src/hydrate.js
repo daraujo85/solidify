@@ -511,7 +511,7 @@ export function hydrateMockup(doc, report, opts = {}) {
   const k6 = mapK6Section(report);
   if (!k6.empty) {
     set(838, (k6.p95Ms ?? "—") + " ms"); hide(840); hide(841);
-    set(856, (k6.throughputRps ?? "—") + " req/s"); hide(858); hide(859);
+    set(856, (k6.throughputRps != null ? k6.throughputRps.toFixed(1) : "—") + " req/s"); hide(858); hide(859);
     set(865, ((k6.errorRate ?? 0) * 100).toFixed(2) + "%"); hide(867); hide(868);
     hide(846, 1); // Usuários (rps) — sem métrica real distinta (tile único, irmão dos outros 3)
     hide(874, 2); // gráfico latência ao longo do tempo — sem série temporal
