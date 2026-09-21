@@ -44,6 +44,17 @@ func TestFail(t *testing.T) {
 	}
 }
 
+func TestFailWhenConfiguredBuildCommandFails(t *testing.T) {
+	r, err := Evaluate(GateInput{
+		RunID: "r1", Profile: ProfileRelease, GlobalScore: 95,
+		IndependenceOK: true, ArbiterResolved: true, EvidenceComplete: true,
+		TestCommandFailed: true,
+	})
+	if err != nil || r.Status != StatusFail {
+		t.Fatalf("status = %v, err = %v; want FAIL", r.Status, err)
+	}
+}
+
 // Aceitação: BLOCKED por immutable critical.
 func TestBlockedImmutable(t *testing.T) {
 	in := GateInput{

@@ -45,6 +45,8 @@ type GateInput struct {
 	// SAI-116: status do score. "available" → score real; "unavailable" →
 	// schema falhou (gate deve ser INCOMPLETE); "error" → provider falhou.
 	ScoreStatus string `json:"score_status"`
+	// TestCommandFailed bloqueia release quando build/test configurado falha.
+	TestCommandFailed bool `json:"test_command_failed"`
 	// SAI-117: controle fino de independência derivado dos atores
 	// efetivamente executados. Se zero-value, fallback para IndependenceOK.
 	Independence IndependenceInput `json:"independence"`
@@ -52,11 +54,11 @@ type GateInput struct {
 
 // IndependenceInput descreve quem rodou e o que o perfil exige (SAI-117).
 type IndependenceInput struct {
-	PeerACalled     bool   // peer_a executou (não skipped)
-	PeerBCalled     bool
-	ArbiterCalled   bool
-	PeerAModel      string // "" se skipped
-	PeerBModel      string
+	PeerACalled           bool // peer_a executou (não skipped)
+	PeerBCalled           bool
+	ArbiterCalled         bool
+	PeerAModel            string // "" se skipped
+	PeerBModel            string
 	RequirePeerA          bool // profile config
 	RequirePeerB          bool
 	RequireArbiter        bool
@@ -91,9 +93,9 @@ func (i IndependenceInput) Evaluate() (ok bool, distinct int, reason string) {
 
 // SubgateResult status individual por subgate.
 type SubgateResult struct {
-	Status  string `json:"status"`  // PASS|WARN|FAIL|INCOMPLETE|BLOCKED
-	Reason  string `json:"reason"`
-	Blocking bool  `json:"-"`       // se true, falha do subgate bloqueia final
+	Status   string `json:"status"` // PASS|WARN|FAIL|INCOMPLETE|BLOCKED
+	Reason   string `json:"reason"`
+	Blocking bool   `json:"-"` // se true, falha do subgate bloqueia final
 }
 
 // Subgates divide a decisão em eixos auditáveis (SAI-117).
@@ -173,6 +175,14 @@ func Evaluate(in GateInput) (*GateResult, error) {
 		res.Status = StatusIncomplete
 		res.Reason = "arbiter não resolveu divergência"
 		res.Subgates.Quality = SubgateResult{Status: StatusIncomplete, Reason: res.Reason, Blocking: true}
+		res.Subgates.Independence = computeIndependenceSubgate(in)
+		return res, nil
+	}
+	// Build/test command failure is a release blocker, independent of score.
+	if in.TestCommandFailed {
+		res.Status = StatusFail
+		res.Reason = "comando de teste/build falhou"
+		res.Subgates.Quality = SubgateResult{Status: StatusFail, Reason: res.Reason, Blocking: true}
 		res.Subgates.Independence = computeIndependenceSubgate(in)
 		return res, nil
 	}
@@ -354,7 +364,6 @@ func padLeft5(s string, n int) string {
 	}
 	return s
 }
-
 
 func checkIncompleteFields(in GateInput, status string) string {
 	return status

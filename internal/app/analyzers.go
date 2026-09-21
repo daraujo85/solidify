@@ -84,7 +84,8 @@ func buildAnalyzers(ctx context.Context, cfg config.Config, dir string, changedP
 		byGate[d.Gate] = d
 	}
 
-	out := make([]report.Analyzer, 0, 5)
+	out := make([]report.Analyzer, 0, 6)
+	out = append(out, runTestsAnalyzer(ctx, cfg, dir))
 	out = append(out, runOrSkip(ctx, byGate[applicability.GateSonar], "sonar", cfg, dir, logger, runSonarAnalyzer))
 	out = append(out, runOrSkip(ctx, byGate[applicability.GateLighthouse], "lighthouse", cfg, dir, logger, runLighthouseAnalyzer))
 	out = append(out, runOrSkip(ctx, byGate[applicability.GateSecurity], "security", cfg, dir, logger, runSecurityAnalyzer))
@@ -137,6 +138,15 @@ func firstOrEmpty(ss []string) string {
 }
 
 func statusPtr(s string) *string { return &s }
+
+func analyzerFailed(analyzers []report.Analyzer, id string) bool {
+	for _, a := range analyzers {
+		if a.ID == id && a.ExecutionStatus != nil && *a.ExecutionStatus == "failed" {
+			return true
+		}
+	}
+	return false
+}
 
 // envOrEmpty lê o valor de uma variável de ambiente referenciada por nome
 // (campo config *_env) — nunca loga o valor, só o usa em runtime.

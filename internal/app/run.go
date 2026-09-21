@@ -275,7 +275,6 @@ func runRun(args []string, env Env, logger *slog.Logger) (retErr error) {
 	heuristicSkip := peer.AllNotApplicable(hints)
 	heuristicHintsText := peer.FormatHeuristicHints(hints)
 
-
 	// --- peer_a ---
 	var peerARes *peer.ExecutorResult
 	var peerACalled bool
@@ -426,8 +425,9 @@ func runRun(args []string, env Env, logger *slog.Logger) (retErr error) {
 	gateIn := gate.GateInput{
 		RunID: runID, Profile: *profileName,
 		GlobalScore: globalScore, ScoreStatus: scoreStatus,
-		EvidenceComplete: true,
-		ArbiterResolved:  !requireArbiter || arbiterCalled,
+		TestCommandFailed: analyzerFailed(bInput.Analyzers, "tests"),
+		EvidenceComplete:  true,
+		ArbiterResolved:   !requireArbiter || arbiterCalled,
 		Independence: gate.IndependenceInput{
 			PeerACalled: peerACalled, PeerBCalled: peerBCalled, ArbiterCalled: arbiterCalled,
 			PeerAModel: modelOf(peerARes), PeerBModel: modelOf(peerBRes),
