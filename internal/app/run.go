@@ -140,7 +140,7 @@ func runRun(args []string, env Env, logger *slog.Logger) (retErr error) {
 	fs := flag.NewFlagSet("run", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	profileName := fs.String("profile", gate.ProfileQuick, "perfil: quick|release|contractual")
-	base := fs.String("base", "HEAD~1", "ref base do diff")
+	base := fs.String("base", "", "ref base do diff (default: project.default_base)")
 	head := fs.String("head", "HEAD", "ref head do diff")
 	dir := fs.String("dir", ".", "diretório do repositório git")
 	if err := fs.Parse(args); err != nil {
@@ -193,8 +193,18 @@ func runRun(args []string, env Env, logger *slog.Logger) (retErr error) {
 
 	ctx := context.Background()
 
-	// Evidência: diff real entre --base e --head (internal/gitx).
-	diffFiles, err := gitx.Diff(*dir, *base+".."+*head, gitx.DiffOpts{})
+	if *base == "" {
+		*base = cfg.Project.DefaultBase
+		bInput.Git.BaseRef = *base
+	}
+	scope, err := (&gitx.Resolver{Dir: *dir, UseMergeBase: cfg.Analysis.UseMergeBase}).Resolve(*base, *head)
+	if err != nil {
+		return errs.Wrap(errs.CodeGit, "resolver range base..head", err)
+	}
+	rng := scope.Range
+
+	// Evidência: diff real do range resolvido (merge-base quando use_merge_base).
+	diffFiles, err := gitx.Diff(*dir, rng, gitx.DiffOpts{})
 	if err != nil {
 		return errs.Wrap(errs.CodeGit, "gerar diff de evidência", err)
 	}
@@ -245,7 +255,6 @@ func runRun(args []string, env Env, logger *slog.Logger) (retErr error) {
 	// Wiring de git.commits[]/git.changed_files[]/migrations[] — antes
 	// disso nenhum dos 3 arrays era populado em produção (só na fixture
 	// estática), gap documentado em docs/dashboard-gap-mapping.md §9/§10/§13.
-	rng := *base + ".." + *head
 	if commits, cErr := buildCommits(*dir, rng); cErr != nil {
 		logger.Warn("git log falhou, commits[] fica vazio", "err", cErr)
 	} else {
