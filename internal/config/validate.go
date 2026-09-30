@@ -430,23 +430,65 @@ func (c Config) validateReport() error {
 	return nil
 }
 
-// validateApplicability valida a config do caminho LLM-enriquecido.
+// validateApplicability valida a config dos caminhos LLM/JEV-enriquecidos.
 func (c Config) validateApplicability() error {
 	llm := c.Applicability.LLM
-	if !llm.Enabled {
-		return nil
+	if llm.Enabled {
+		if strings.TrimSpace(llm.Model) == "" {
+			return invalid("applicability.llm.model",
+				"applicability.llm.enabled=true exige model preferido").
+				WithHint("preencha applicability.llm.model ou desabilite a feature")
+		}
+		switch llm.Mode {
+		case "", "advisory", "enforce":
+		default:
+			return invalid("applicability.llm.mode",
+				"modo inválido: "+quote(llm.Mode)).
+				WithHint("use advisory ou enforce")
+		}
 	}
-	if strings.TrimSpace(llm.Model) == "" {
-		return invalid("applicability.llm.model",
-			"applicability.llm.enabled=true exige model preferido").
-			WithHint("preencha applicability.llm.model ou desabilite a feature")
+
+	// JEV (TypeSafe System One) — opt-in explícito.
+	jev := c.Applicability.JEV
+	if jev.Enabled {
+		if strings.TrimSpace(jev.APIKeyEnv) == "" {
+			return invalid("applicability.jev.api_key_env",
+				"applicability.jev.enabled=true exige api_key_env").
+				WithHint("preencha applicability.jev.api_key_env (default JEV_API_KEY) ou desabilite a feature")
+		}
+		if err := validateEnvRef("applicability.jev.api_key_env", jev.APIKeyEnv); err != nil {
+			return err
+		}
+		if jev.Endpoint != "" {
+			if err := validateURL("applicability.jev.endpoint", jev.Endpoint); err != nil {
+				return err
+			}
+		}
+		switch jev.Mode {
+		case "", "advisory", "enforce":
+		default:
+			return invalid("applicability.jev.mode",
+				"modo inválido: "+quote(jev.Mode)).
+				WithHint("use advisory ou enforce")
+		}
 	}
-	switch llm.Mode {
-	case "", "advisory", "enforce":
-	default:
-		return invalid("applicability.llm.mode",
-			"modo inválido: "+quote(llm.Mode)).
-			WithHint("use advisory ou enforce")
+
+	// JEVRegression analyzer (opt-in).
+	jreg := c.Analyzers.JEVRegression
+	if jreg.Enabled && strings.TrimSpace(jreg.APIKeyEnv) == "" {
+		return invalid("analyzers.jev_regression.api_key_env",
+			"analyzers.jev_regression.enabled=true exige api_key_env").
+			WithHint("preencha analyzers.jev_regression.api_key_env (default JEV_API_KEY)")
+	}
+	if jreg.Enabled {
+		if err := validateEnvRef("analyzers.jev_regression.api_key_env", jreg.APIKeyEnv); err != nil {
+			return err
+		}
+		if jreg.Endpoint != "" {
+			if err := validateURL("analyzers.jev_regression.endpoint", jreg.Endpoint); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

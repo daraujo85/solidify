@@ -15,6 +15,7 @@ import (
 
 	"github.com/diegoaraujo/solidify/internal/ai"
 	"github.com/diegoaraujo/solidify/internal/config"
+	"github.com/diegoaraujo/solidify/internal/jev"
 	"github.com/diegoaraujo/solidify/internal/sonar"
 )
 
@@ -36,6 +37,7 @@ var AllChecks = []string{
 	"disk_space",
 	"network",
 	"9router",
+	"jev",
 	"peer_review_canary",
 	"peer_review_store_v1",
 	"k6",
@@ -62,6 +64,8 @@ func RunCheck(name string) CheckResult {
 		return checkNetwork()
 	case "9router":
 		return check9Router()
+	case "jev":
+		return checkJEV()
 	case "peer_review_canary":
 		return checkPeerReviewCanary()
 	case "peer_review_store_v1":
@@ -240,6 +244,48 @@ func checkSonarScanner() CheckResult {
 		return CheckResult{Name: "sonar-scanner", OK: true, Message: bin + " disponível"}
 	}
 	return CheckResult{Name: "sonar-scanner", OK: false, Message: "sonar-scanner/sonar-scanner-cli não encontrado no PATH"}
+}
+
+// checkJEV verifica a configuração do JEV System One (opt-in). Sem
+// chave no ambiente ⇒ OK (é opcional); com chave, faz um probe real
+// de conectividade no endpoint.
+func checkJEV() CheckResult {
+	cfg := config.Default()
+	keyEnv := "JEV_API_KEY"
+	if cfg.Analyzers.JEVRegression.Enabled && cfg.Analyzers.JEVRegression.APIKeyEnv != "" {
+		keyEnv = cfg.Analyzers.JEVRegression.APIKeyEnv
+	}
+	token := os.Getenv(keyEnv)
+	if token == "" {
+		token = os.Getenv(jev.EnvKeyAPIKey)
+		keyEnv = jev.EnvKeyAPIKey
+	}
+	if token == "" {
+		return CheckResult{Name: "jev", OK: true, Message: "não configurado (opcional; chave via env " + keyEnv + ")"}
+	}
+
+	client := jev.NewClient("", token)
+	probeURL := strings.TrimRight(client.Endpoint, "/")
+	httpClient := &http.Client{Timeout: 3 * time.Second}
+	body := strings.NewReader(`{"model":"jev-latest","state":"doctor","questions":{"ok":{"type":"noul","instructions":"está operacional?"}}}`)
+	req, err := http.NewRequest(http.MethodPost, probeURL, body)
+	if err != nil {
+		return CheckResult{Name: "jev", OK: false, Message: "probe URL inválida: " + err.Error()}
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return CheckResult{Name: "jev", OK: false, Message: "probe falhou: " + err.Error()}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusUnauthorized {
+		return CheckResult{Name: "jev", OK: false, Message: "401 Unauthorized — chave inválida ou expirada"}
+	}
+	if resp.StatusCode != http.StatusOK {
+		return CheckResult{Name: "jev", OK: false, Message: "status " + resp.Status}
+	}
+	return CheckResult{Name: "jev", OK: true, Message: "OK " + probeURL + " (" + resp.Status + ")"}
 }
 
 func checkZAP() CheckResult {

@@ -1,6 +1,7 @@
 /bin/
 /build/
 /out/
+.env
 .solidify/out/
 .solidify/release-report.json
 .claude/scheduled_tasks.lock

@@ -157,6 +157,10 @@
       "enabled": true,
       "threshold": 70,
       "format": "auto"
+    },
+    "jev_regression": {
+      "enabled": true,
+      "api_key_env": "JEV_API_KEY"
     }
   },
   "ai": {
@@ -227,5 +231,12 @@
     "persist_model_requests": false,
     "persist_model_responses": true,
     "redact_secrets": true
+  },
+  "applicability": {
+    "jev": {
+      "enabled": true,
+      "api_key_env": "JEV_API_KEY",
+      "mode": "advisory"
+    }
   }
 }

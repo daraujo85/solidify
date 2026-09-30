@@ -146,6 +146,21 @@ type Analyzers struct {
 	Lighthouse LighthouseAnalyzer `json:"lighthouse"`
 	Load       LoadAnalyzer       `json:"load"`
 	Coverage   CoverageAnalyzer   `json:"coverage"`
+	// JEVRegression (opt-in) roda o JEV System One sobre o diff e
+	// emite findings de risco de regressão (quebra de contrato,
+	// deleção de lógica funcional, enfraquecimento de testes). Só
+	// roda quando Enabled=true E a chave JEV está no ambiente.
+	JEVRegression JEVRegressionAnalyzer `json:"jev_regression"`
+}
+
+// JEVRegressionAnalyzer configura o analyzer anti-regressão via JEV.
+type JEVRegressionAnalyzer struct {
+	Enabled bool `json:"enabled"`
+	// APIKeyEnv nome da variável de ambiente com a chave JEV.
+	// Vazio = JEV_API_KEY.
+	APIKeyEnv string `json:"api_key_env,omitempty"`
+	// Endpoint opcional; vazio = default do client JEV.
+	Endpoint string `json:"endpoint,omitempty"`
 }
 
 // TestsAnalyzer configura o test runner (SAI-030).
@@ -350,6 +365,7 @@ type Privacy struct {
 // pura, sem chamadas extras a LLM.
 type Applicability struct {
 	LLM ApplicabilityLLM `json:"llm"`
+	JEV ApplicabilityJEV `json:"jev"`
 }
 
 // ApplicabilityLLM configura o caminho LLM-enriquecido de applicability.
@@ -357,6 +373,27 @@ type ApplicabilityLLM struct {
 	Enabled bool   `json:"enabled"`
 	Model   string `json:"model,omitempty"`
 	Mode    string `json:"mode,omitempty"` // advisory|enforce; vazio = advisory
+}
+
+// ApplicabilityJEV configura o caminho JEV-enriquecido de applicability.
+//
+// JEV (TypeSafe System One) é um motor de decisão determinístico em
+// ~100-300ms, mais rápido e barato que o LLM generativo pra decisões
+// schema-enforced de applicability. Quando habilitado E a chave está
+// presente no ambiente, o run usa o JEVDecider (ver
+// internal/applicability/jev.go) que decide os 8 gates via primitivas
+// choice/noul/score. Em qualquer falha cai pra heurística pura —
+// nunca quebra o run.
+//
+// Opt-in explícito: Enabled=false (default) ⇒ comportamento idêntico
+// à heurística pura, sem chamadas extras. APIKeyEnv guarda o *nome*
+// da variável de ambiente (default JEV_API_KEY); Endpoint vazio usa o
+// default do client; Mode: advisory|enforce (vazio = advisory).
+type ApplicabilityJEV struct {
+	Enabled   bool   `json:"enabled"`
+	APIKeyEnv string `json:"api_key_env,omitempty"`
+	Endpoint  string `json:"endpoint,omitempty"`
+	Mode      string `json:"mode,omitempty"` // advisory|enforce; vazio = advisory
 }
 
 func ptr(b bool) *bool { return &b }
@@ -459,6 +496,7 @@ func Default() Config {
 				VUs: 10, DurationSeconds: 30, ThresholdP95MS: 500, ThresholdP99MS: 1000, MaxErrorRate: 0.01,
 			},
 			Coverage: CoverageAnalyzer{Enabled: true, Threshold: 70, Format: "auto"},
+		JEVRegression: JEVRegressionAnalyzer{Enabled: false, APIKeyEnv: "JEV_API_KEY"},
 		},
 		AI: AI{
 			PeerA: PeerA{Source: "terminal-mcp"},
@@ -489,6 +527,7 @@ func Default() Config {
 		Report: Report{Language: "pt-BR", PDF: PDF{Paper: "A4", BrowserMode: "auto"}},
 		Applicability: Applicability{
 			LLM: ApplicabilityLLM{Enabled: false, Mode: "advisory"},
+			JEV: ApplicabilityJEV{Enabled: false, APIKeyEnv: "JEV_API_KEY", Mode: "advisory"},
 		},
 		Privacy: Privacy{
 			PersistFullDiff:       true,
@@ -506,8 +545,14 @@ func (c Config) EnvRefs() []string {
 	if c.Analyzers.Sonar.TokenEnv != "" {
 		refs = append(refs, c.Analyzers.Sonar.TokenEnv)
 	}
+	if c.Analyzers.JEVRegression.Enabled && c.Analyzers.JEVRegression.APIKeyEnv != "" {
+		refs = append(refs, c.Analyzers.JEVRegression.APIKeyEnv)
+	}
 	if c.AI.ExternalProvider.APIKeyEnv != "" {
 		refs = append(refs, c.AI.ExternalProvider.APIKeyEnv)
+	}
+	if c.Applicability.JEV.Enabled && c.Applicability.JEV.APIKeyEnv != "" {
+		refs = append(refs, c.Applicability.JEV.APIKeyEnv)
 	}
 	return refs
 }

@@ -38,9 +38,14 @@ import (
 type Source string
 
 const (
-	SourceHeuristic     Source = "heuristic"
-	SourceLLM           Source = "llm"
-	SourceLLMFallback   Source = "llm-fallback"
+	SourceHeuristic   Source = "heuristic"
+	SourceLLM         Source = "llm"
+	SourceLLMFallback Source = "llm-fallback"
+	// SourceJEV: decisão veio do JEV System One (TypeSafe AI).
+	SourceJEV Source = "jev"
+	// SourceJEVFallback: JEV falhou (timeout/HTTP/parse) e o run caiu
+	// na heurística pura — nunca quebra o run (fail-open).
+	SourceJEVFallback Source = "jev-fallback"
 )
 
 // Mode de operação do LLMDecider.

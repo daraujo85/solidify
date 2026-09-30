@@ -76,28 +76,29 @@ func buildApplicabilityProfile(cfg config.Config, changedPaths []string, hasMigr
 //
 // llmDecider é opcional: se não-nil e habilitado, enriquece applicability
 // com LLM (fallback automático para heurística em erro/timeout).
-func buildAnalyzers(ctx context.Context, cfg config.Config, dir string, changedPaths []string, hasMigrations, hasEnvChanges bool, logger *slog.Logger, llmDecider *applicability.LLMDecider) []report.Analyzer {
+func buildAnalyzers(ctx context.Context, cfg config.Config, dir string, changedPaths []string, hasMigrations, hasEnvChanges bool, logger *slog.Logger, decider applicability.DecisionEnricher, diffText string) []report.Analyzer {
 	profile := buildApplicabilityProfile(cfg, changedPaths, hasMigrations, hasEnvChanges)
-	decisions := decideApplicability(ctx, profile, llmDecider)
+	decisions := decideApplicability(ctx, profile, decider)
 	byGate := make(map[applicability.Gate]applicability.Decision, len(decisions))
 	for _, d := range decisions {
 		byGate[d.Gate] = d
 	}
 
-	out := make([]report.Analyzer, 0, 6)
+	out := make([]report.Analyzer, 0, 7)
 	out = append(out, runTestsAnalyzer(ctx, cfg, dir))
 	out = append(out, runOrSkip(ctx, byGate[applicability.GateSonar], "sonar", cfg, dir, logger, runSonarAnalyzer))
 	out = append(out, runOrSkip(ctx, byGate[applicability.GateLighthouse], "lighthouse", cfg, dir, logger, runLighthouseAnalyzer))
 	out = append(out, runOrSkip(ctx, byGate[applicability.GateSecurity], "security", cfg, dir, logger, runSecurityAnalyzer))
 	out = append(out, runOrSkip(ctx, byGate[applicability.GateK6], "k6", cfg, dir, logger, runK6Analyzer))
 	out = append(out, runCoverageAnalyzer(cfg, dir)) // coverage não depende de applicability — só de arquivo existir
+	out = append(out, runJEVRegressionAnalyzer(ctx, cfg, diffText, changedPaths, logger))
 	return out
 }
 
-// decideApplicability decide via LLM quando o decider está configurado;
+// decideApplicability decide via enricher quando configurado;
 // caso contrário cai direto pra heurística pura (compat).
-func decideApplicability(ctx context.Context, profile applicability.Profile, decider *applicability.LLMDecider) []applicability.Decision {
-	if decider == nil || decider.Provider == nil || decider.Model == "" {
+func decideApplicability(ctx context.Context, profile applicability.Profile, decider applicability.DecisionEnricher) []applicability.Decision {
+	if decider == nil {
 		return applicability.Decide(profile)
 	}
 	return decider.DecideWithContext(ctx, profile)

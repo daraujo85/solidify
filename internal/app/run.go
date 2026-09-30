@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/diegoaraujo/solidify/internal/ai"
@@ -19,6 +20,7 @@ import (
 	"github.com/diegoaraujo/solidify/internal/errs"
 	"github.com/diegoaraujo/solidify/internal/gate"
 	"github.com/diegoaraujo/solidify/internal/gitx"
+	"github.com/diegoaraujo/solidify/internal/jev"
 	"github.com/diegoaraujo/solidify/internal/peer"
 	"github.com/diegoaraujo/solidify/internal/report"
 )
@@ -235,22 +237,39 @@ func runRun(args []string, env Env, logger *slog.Logger) (retErr error) {
 
 	changedPaths := diffPaths(diffFiles)
 
-	// Applicability via LLM (opt-in via applicability.llm.enabled):
-	// quando habilitado, enriquece as 8 decisions com segunda opinião
-	// do mesmo provider usado pelos peers. Default off ⇒ comportamento
-	// idêntico ao atual (heurística pura).
-	var appLLMDecider *applicability.LLMDecider
-	if cfg.Applicability.LLM.Enabled && cfg.Applicability.LLM.Model != "" {
-		appLLMDecider = applicability.NewLLMDecider(provider, cfg.Applicability.LLM.Model)
+	// Applicability via LLM ou JEV (opt-in via applicability.llm.enabled /
+	// applicability.jev.enabled): quando habilitado, enriquece as 8 decisions
+	// com segunda opinião. Default off ⇒ comportamento idêntico ao atual
+	// (heurística pura). JEV tem precedência sobre LLM quando ambos ligados
+	// (mais rápido e barato pra decisão schema-enforced); LLMDecider usado
+	// pelo peer é o mesmo `provider`.
+	var appDecider applicability.DecisionEnricher
+	if cfg.Applicability.JEV.Enabled {
+		jevKeyEnv := cfg.Applicability.JEV.APIKeyEnv
+		if jevKeyEnv == "" {
+			jevKeyEnv = jev.EnvKeyAPIKey
+		}
+		jevClient := jev.NewClient(cfg.Applicability.JEV.Endpoint, os.Getenv(jevKeyEnv))
+		jevDecider := applicability.NewJEVDecider(jevClient)
+		switch cfg.Applicability.JEV.Mode {
+		case "enforce":
+			jevDecider.Mode = applicability.ModeEnforce
+		default:
+			jevDecider.Mode = applicability.ModeAdvisory
+		}
+		appDecider = jevDecider
+	} else if cfg.Applicability.LLM.Enabled && cfg.Applicability.LLM.Model != "" {
+		appLLMDecider := applicability.NewLLMDecider(provider, cfg.Applicability.LLM.Model)
 		switch cfg.Applicability.LLM.Mode {
 		case "enforce":
 			appLLMDecider.Mode = applicability.ModeEnforce
 		default:
 			appLLMDecider.Mode = applicability.ModeAdvisory
 		}
+		appDecider = appLLMDecider
 	}
 
-	bInput.Analyzers = buildAnalyzers(ctx, cfg, *dir, changedPaths, hasMigrationChanges(changedPaths), hasEnvChanges(changedPaths), logger, appLLMDecider)
+	bInput.Analyzers = buildAnalyzers(ctx, cfg, *dir, changedPaths, hasMigrationChanges(changedPaths), hasEnvChanges(changedPaths), logger, appDecider, diffFilesToText(diffFiles))
 
 	// Wiring de git.commits[]/git.changed_files[]/migrations[] — antes
 	// disso nenhum dos 3 arrays era populado em produção (só na fixture
@@ -755,6 +774,25 @@ func diffFilesToShards(files []gitx.DiffFile) []peer.EvidenceShard {
 		})
 	}
 	return shards
+}
+
+// diffFilesToText monta o texto bruto do diff (headers + hunks) para
+// analyzers que avaliam o conteúdo (ex.: jev_regression). Consumidores
+// truncam o que precisarem — aqui não há limite de propósito.
+func diffFilesToText(files []gitx.DiffFile) string {
+	var sb strings.Builder
+	for _, f := range files {
+		for _, h := range f.Hunks {
+			sb.WriteString("diff --git a/")
+			sb.WriteString(f.Path)
+			sb.WriteString("\n")
+			sb.WriteString(h.Header)
+			sb.WriteString("\n")
+			sb.WriteString(h.Content)
+			sb.WriteString("\n")
+		}
+	}
+	return sb.String()
 }
 
 // parsedToPeerScores converte o ParsedContent (schema canônico SAI-129A:

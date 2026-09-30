@@ -512,3 +512,86 @@ func asError(err error, target **errs.Error) bool {
 	}
 	return false
 }
+
+// JEV applicability: enabled sem api_key_env é erro.
+func TestValidateJEVApplicabilityRequiresAPIKeyEnv(t *testing.T) {
+	cfg := Default()
+	cfg.Project.Name = "x"
+	cfg.Applicability.JEV.Enabled = true
+	cfg.Applicability.JEV.APIKeyEnv = ""
+	err := cfg.Validate()
+	if errs.CodeOf(err) != errs.CodeConfig {
+		t.Errorf("esperava erro de config, got %v", err)
+	}
+	var typed *errs.Error
+	if asError(err, &typed) && !strings.Contains(typed.Field, "applicability.jev.api_key_env") {
+		t.Errorf("field = %q, quero conter applicability.jev.api_key_env", typed.Field)
+	}
+}
+
+// JEV applicability: api_key_env com valor (não nome) é rejeitado.
+func TestValidateJEVApplicabilityRejectsValueInEnv(t *testing.T) {
+	cfg := Default()
+	cfg.Project.Name = "x"
+	cfg.Applicability.JEV.Enabled = true
+	cfg.Applicability.JEV.APIKeyEnv = "sk-proj-abc123"
+	if errs.CodeOf(cfg.Validate()) != errs.CodeConfig {
+		t.Error("esperava erro de config (valor colado em api_key_env)")
+	}
+}
+
+// JEV applicability: mode inválido é rejeitado.
+func TestValidateJEVApplicabilityRejectsInvalidMode(t *testing.T) {
+	cfg := Default()
+	cfg.Project.Name = "x"
+	cfg.Applicability.JEV.Enabled = true
+	cfg.Applicability.JEV.APIKeyEnv = "JEV_API_KEY"
+	cfg.Applicability.JEV.Mode = "banana"
+	if errs.CodeOf(cfg.Validate()) != errs.CodeConfig {
+		t.Error("esperava erro de config (mode inválido)")
+	}
+}
+
+// JEV applicability válido passa.
+func TestValidateJEVApplicabilityValid(t *testing.T) {
+	cfg := Default()
+	cfg.Project.Name = "x"
+	cfg.Applicability.JEV.Enabled = true
+	cfg.Applicability.JEV.APIKeyEnv = "JEV_API_KEY"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("não esperava erro: %v", err)
+	}
+}
+
+// JEVRegression analyzer: enabled sem api_key_env é erro.
+func TestValidateJEVRegressionRequiresAPIKeyEnv(t *testing.T) {
+	cfg := Default()
+	cfg.Project.Name = "x"
+	cfg.Analyzers.JEVRegression.Enabled = true
+	cfg.Analyzers.JEVRegression.APIKeyEnv = ""
+	err := cfg.Validate()
+	if errs.CodeOf(err) != errs.CodeConfig {
+		t.Errorf("esperava erro de config, got %v", err)
+	}
+	var typed *errs.Error
+	if asError(err, &typed) && !strings.Contains(typed.Field, "analyzers.jev_regression.api_key_env") {
+		t.Errorf("field = %q", typed.Field)
+	}
+}
+
+// EnvRefs inclui JEV quando habilitado.
+func TestEnvRefsIncludesJEVWhenEnabled(t *testing.T) {
+	cfg := Default()
+	cfg.Project.Name = "x"
+	cfg.Applicability.JEV.Enabled = true
+	cfg.Analyzers.JEVRegression.Enabled = true
+
+	refs := cfg.EnvRefs()
+	found := map[string]bool{}
+	for _, r := range refs {
+		found[r] = true
+	}
+	if !found["JEV_API_KEY"] {
+		t.Error("EnvRefs não inclui JEV_API_KEY com JEV habilitado")
+	}
+}
